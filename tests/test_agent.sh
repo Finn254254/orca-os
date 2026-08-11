@@ -25,3 +25,9 @@ done
 
 grep -q 'Node ID: test-node-123' "$temp_root/run/agent.status"
 grep -q '"nodeId":"test-node-123"' "$temp_root/run/node.json"
+grep -q '"pid":' "$temp_root/run/node.json"
+kill "$agent_pid"
+wait "$agent_pid" || true
+agent_pid=""
+test ! -e "$temp_root/run/agent.status"
+test ! -e "$temp_root/run/node.json"

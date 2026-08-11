@@ -19,24 +19,26 @@ else
 fi
 
 write_status() {
-  local hostname architecture kernel updated
+  local hostname architecture kernel updated pid
   hostname="$(hostname)"
   architecture="$(uname -m)"
   kernel="$(uname -r)"
   updated="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  pid="$$"
 
   cat > "$runtime_dir/agent.status" <<EOF
 Agent: active
 Node ID: $node_id
 Hostname: $hostname
 Updated: $updated
+PID: $pid
 EOF
   cat > "$runtime_dir/node.json" <<EOF
-{"schemaVersion":1,"nodeId":"$node_id","hostname":"$hostname","architecture":"$architecture","kernel":"$kernel","agent":"active","updated":"$updated"}
+{"schemaVersion":1,"nodeId":"$node_id","hostname":"$hostname","architecture":"$architecture","kernel":"$kernel","agent":"active","pid":$pid,"updated":"$updated"}
 EOF
 }
 
-trap 'rm -f "$runtime_dir/agent.status"; exit 0' TERM INT
+trap 'rm -f "$runtime_dir/agent.status" "$runtime_dir/node.json"; exit 0' TERM INT
 while true; do
   write_status
   sleep "$interval" & wait $!
