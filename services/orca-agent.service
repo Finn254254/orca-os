@@ -1,0 +1,21 @@
+[Unit]
+Description=Orca node agent
+Documentation=https://github.com/Finn254254/orca-os
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/orca/orca-agent
+Restart=always
+RestartSec=5
+RuntimeDirectory=orca
+RuntimeDirectoryMode=0755
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/orca
+
+[Install]
+WantedBy=multi-user.target

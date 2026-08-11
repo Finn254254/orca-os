@@ -1,0 +1,8 @@
+NAME="Orca OS"
+ID=orca
+VERSION="0.1.0"
+VERSION_ID="0.1"
+PRETTY_NAME="Orca OS 0.1.0 (Tidepool)"
+HOME_URL="https://github.com/Finn254254/orca-os"
+SUPPORT_URL="https://github.com/Finn254254/orca-os/issues"
+ARCHITECTURES="x86_64 arm64"

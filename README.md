@@ -1,32 +1,59 @@
 # Orca OS
 
-Orca OS is a Linux-based operating system project for Orca compute systems, focused on local AI, node management, hardware monitoring, service orchestration, and simple administration.
+Orca OS is a minimal, appliance-style Linux platform for Orca servers and compute nodes.
 
-## Initial targets
+Milestone 1 provides a reproducible x86-64 VM image definition, the `orca` command-line tool, an identity file at `/etc/orca-release`, and the `orca-agent` systemd service. The image is designed for QEMU first, with ARM64 support kept as a separate future target.
 
-- x86-64 virtual machine development image
-- ARM64 hardware images later
-- Orca system daemon
-- Orca CLI
-- Node discovery and health monitoring
-- Local AI runtime integration
-- Web management interface
-- Secure updates and recovery
+## Quick start
 
-## First milestone
+Run the host-side tests:
 
-Produce a bootable x86-64 VM development image with the Orca core service and CLI. This lets the software stack be developed and tested on a Windows PC before dedicated Orca hardware is ready.
+```bash
+make test
+```
+
+Build an x86-64 raw disk image on a Linux host with [mkosi](https://github.com/systemd/mkosi) installed:
+
+```bash
+make image
+```
+
+Run the resulting image with QEMU:
+
+```bash
+make vm
+```
+
+The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 
 ## Repository layout
 
-- `docs/` architecture, roadmap, and design decisions
-- `build/` image build configuration and scripts
-- `services/orcad/` Orca system daemon
-- `cli/` Orca command-line interface
-- `config/` default system configuration
-- `tests/` VM and integration tests
-- `.github/workflows/` automated validation and image builds
+- `build/` image definition and build entrypoint
+- `cli/` the `orca` CLI
+- `services/` Orca background service and systemd unit
+- `config/` operating-system identity files
+- `tools/` root filesystem installation tooling
+- `vm/` QEMU launcher
+- `tests/` host-side integration tests
+- `docs/` operator documentation
+- `targets/` architecture-specific work, beginning with x86-64
 
-## Status
+## Commands
 
-Early development.
+```text
+orca info       Print Orca and operating-system identity
+orca status     Show Orca service and node status
+orca version    Print the Orca OS version
+```
+
+## Roadmap
+
+1. Bootable x86-64 VM image
+2. Node discovery and management
+3. Local AI runtime and model management
+4. Web management dashboard
+5. ARM64 images for Orca hardware
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
