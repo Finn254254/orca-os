@@ -11,6 +11,8 @@ cp "$project_root/config/etc/orca-release" "$temp_root/etc/orca-release"
 info="$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" info)"
 grep -q 'Name: Orca OS 0.1.0 (Tidepool)' <<<"$info"
 grep -q 'Architecture:' <<<"$info"
+grep -q 'CPU:' <<<"$info"
+grep -q 'Memory MiB:' <<<"$info"
 
 status="$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" status)"
 grep -q 'Agent: inactive' <<<"$status"

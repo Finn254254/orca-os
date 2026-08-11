@@ -23,12 +23,18 @@ orca_version() {
 }
 
 command_info() {
-  local hostname kernel os_name architecture
+  local hostname kernel os_name architecture cpu_model cpu_cores memory_mib virtualization
   hostname="$(hostname 2>/dev/null || printf unknown)"
   kernel="$(uname -r 2>/dev/null || printf unknown)"
   architecture="$(uname -m 2>/dev/null || printf unknown)"
   os_name="$(read_value PRETTY_NAME "$release_file")"
+  cpu_model="$(awk -F: '/model name/ { sub(/^ /, "", $2); print $2; exit }' /proc/cpuinfo 2>/dev/null || true)"
+  cpu_cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf unknown)"
+  memory_mib="$(awk '/MemTotal/ { printf "%d", $2 / 1024; exit }' /proc/meminfo 2>/dev/null || true)"
+  virtualization="$(systemd-detect-virt 2>/dev/null || printf physical)"
   [[ -n "$os_name" ]] || os_name="Orca OS"
+  [[ -n "$cpu_model" ]] || cpu_model="unknown"
+  [[ -n "$memory_mib" ]] || memory_mib="unknown"
 
   cat <<EOF
 Orca OS Information
@@ -37,6 +43,10 @@ Version: $(orca_version)
 Hostname: $hostname
 Architecture: $architecture
 Kernel: $kernel
+CPU: $cpu_model
+CPU Cores: $cpu_cores
+Memory MiB: $memory_mib
+Virtualization: $virtualization
 EOF
 }
 
