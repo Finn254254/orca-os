@@ -4,6 +4,8 @@
 
 Install [QEMU for Windows](https://www.qemu.org/download/#windows) and add its installation directory to `PATH`. Build the image from WSL2 or another Linux machine, then copy `out/orca-os-x86_64.raw` to Windows.
 
+Use the UEFI firmware files installed with QEMU or edk2: `OVMF_CODE.fd` and `OVMF_VARS.fd`. Copy `OVMF_VARS.fd` before each clean test VM because it is writable guest state.
+
 ## Launch with PowerShell
 
 ```powershell
@@ -12,6 +14,8 @@ qemu-system-x86_64.exe `
   -cpu max `
   -m 2048 `
   -smp 2 `
+  -drive if=pflash,format=raw,readonly=on,file=OVMF_CODE.fd `
+  -drive if=pflash,format=raw,file=ORCA_OVMF_VARS.fd `
   -drive file=orca-os-x86_64.raw,format=raw,if=virtio `
   -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 `
   -serial mon:stdio
