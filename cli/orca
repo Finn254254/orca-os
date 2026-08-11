@@ -6,10 +6,12 @@ if [[ -n "$ORCA_ROOT" ]]; then
   release_file="$ORCA_ROOT/etc/orca-release"
   os_release_file="$ORCA_ROOT/etc/os-release"
   runtime_dir="$ORCA_ROOT/run/orca"
+  state_dir="$ORCA_ROOT/var/lib/orca"
 else
   release_file="/etc/orca-release"
   os_release_file="/etc/os-release"
   runtime_dir="/run/orca"
+  state_dir="/var/lib/orca"
 fi
 
 read_value() {
@@ -70,12 +72,7 @@ command_status() {
 }
 
 command_node() {
-  local node_id_file
-  if [[ -n "$ORCA_ROOT" ]]; then
-    node_id_file="$ORCA_ROOT/var/lib/orca/node-id"
-  else
-    node_id_file="/var/lib/orca/node-id"
-  fi
+  local node_id_file="$state_dir/node-id"
 
   case "${1:-}" in
     id)
@@ -97,6 +94,38 @@ command_node() {
   esac
 }
 
+command_peer() {
+  local peers_dir="$state_dir/peers" node_id endpoint peer_file
+  case "${1:-}" in
+    list)
+      shopt -s nullglob
+      local peer_files=("$peers_dir"/*.json)
+      if [[ ${#peer_files[@]} -eq 0 ]]; then
+        echo "No enrolled peers."
+      else
+        cat "${peer_files[@]}"
+      fi
+      ;;
+    add)
+      node_id="${2:-}"
+      endpoint="${3:-}"
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      [[ "$endpoint" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,255}$ ]] || { echo "Invalid peer endpoint." >&2; return 2; }
+      mkdir -p "$peers_dir"
+      peer_file="$peers_dir/$node_id.json"
+      printf '{"schemaVersion":1,"nodeId":"%s","endpoint":"%s"}\n' "$node_id" "$endpoint" > "$peer_file"
+      echo "Enrolled peer: $node_id"
+      ;;
+    remove)
+      node_id="${2:-}"
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      rm -f "$peers_dir/$node_id.json"
+      echo "Removed peer: $node_id"
+      ;;
+    *) echo "Usage: orca peer <list|add NODE_ID ENDPOINT|remove NODE_ID>" >&2; return 2 ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: orca <command>
@@ -106,6 +135,9 @@ Commands:
   status     Print local Orca node status; add --json for structured output
   node id    Print the persistent local node identity
   node show  Print the structured local node record
+  peer list  List enrolled peer nodes
+  peer add   Enroll a peer node by ID and endpoint
+  peer remove Remove an enrolled peer node
   version    Print the Orca OS version
 EOF
 }
@@ -114,6 +146,7 @@ case "${1:-}" in
   info) command_info ;;
   status) shift; command_status "$@" ;;
   node) shift; command_node "$@" ;;
+  peer) shift; command_peer "$@" ;;
   version) orca_version ;;
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;

@@ -25,6 +25,10 @@ grep -q 'Node ID: test-node' <<<"$status"
 grep -q '"nodeId":"test-node"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" status --json)"
 [[ "$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" node id)" == "test-node" ]]
 grep -q '"agent":"active"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" node show)"
+ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer add peer-one 10.0.0.2:9876 >/dev/null
+grep -q '"nodeId":"peer-one"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer list)"
+ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer remove peer-one >/dev/null
+grep -q 'No enrolled peers.' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer list)"
 
 [[ "$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" version)" == "0.1.0" ]]
 
