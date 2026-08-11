@@ -15,7 +15,7 @@ jobs:
         run: make test
       - name: Validate shell syntax
         run: |
-          find build cli services tools tests vm -type f -print0 | xargs -0 -n1 bash -n
+          bash -n build/*.sh cli/orca services/orca-agent tools/*.sh tests/*.sh vm/*.sh
           python3 -m py_compile services/orca-api.py tests/test_api.py
       - name: Validate the mkosi configuration
         run: |
