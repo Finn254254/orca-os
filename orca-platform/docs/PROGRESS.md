@@ -4,8 +4,9 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-Phases 1-5 complete (scaffolding, shared libs, mesh, Control, Agent,
-end-to-end wiring, Orca API + security). Moving into Phase 6 (Orca CLI).
+Phases 1-6 complete (scaffolding, shared libs, mesh, Control, Agent,
+end-to-end wiring, Orca API + security, Orca CLI). Moving into Phase 7
+(Orca Dashboard).
 
 ## Completed
 
@@ -108,9 +109,31 @@ end-to-end wiring, Orca API + security). Moving into Phase 6 (Orca CLI).
     401 without auth, Control-proxied node visibility after a real mesh
     registration, role enforcement for commands/users, OpenAPI served).
 
+- **Phase 6 — Orca CLI**
+  - `@orca/cli`: `orca login/logout` (stateless session token saved to
+    `~/.orca/cli-session.json`, overridable via `--url`/`--token` or
+    `ORCA_API_URL`/`ORCA_API_TOKEN` for scripted use), `status`, `nodes`,
+    `node <id>`, `metrics <id>`, `services <id>`, `version`. `models`/`jobs`/
+    `logs` call the real (not-yet-existing) API endpoints and surface the
+    404 as a clear hint rather than a stack trace. `run`/`deploy`/`update`/
+    `power`/`backup` are registered with clear "requires Phase N" messages
+    (per the build instructions' explicit distinction between "implement
+    useful commands including X" and "design support for Y").
+  - CLI talks only to Orca API, never to Control/Agent/system services
+    directly, per the build instructions.
+  - Found and fixed a real bug via the e2e test: a global `--url` program
+    option and a duplicate per-subcommand `--url` option on `login`
+    collided, so `orca login --url ...` silently ignored the flag and fell
+    back to the default `localhost:8080`. Fixed by having `login` read the
+    global option instead of declaring its own.
+  - Tests: 7 unit (table/byte formatting, `ApiClient` auth header + error
+    surfacing) + 1 real e2e test (`tests/e2e/cli.test.ts`) that spawns the
+    actual `orca` binary against real Control + API processes: login,
+    status, nodes, version, and the "not implemented yet" paths.
+
 ## Partially completed / next up
 
-- Phases 6-24: not started (see `orca-platform/README.md` for the full
+- Phases 7-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -128,7 +151,7 @@ as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (6), `api` (6), `tests` e2e (1) = 36/36.
+`control` (6), `agent` (6), `api` (6), `cli` (7), `tests` e2e (2) = 44/44.
 
 ## Known limitations
 
@@ -166,7 +189,8 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca CLI (Phase 6): `orca status/nodes/node/metrics/models/jobs/logs/
-   services/version` talking to Orca API.
-2. Orca Dashboard (Phase 7): React admin UI over Orca API + `/ws`.
-3. Multi-node simulation environment + first demo (Phase 8).
+1. Orca Dashboard (Phase 7): React admin UI over Orca API + `/ws`.
+2. Multi-node simulation environment + first demo (Phase 8): this is the
+   point where `orca-platform/scripts/dev-cluster.mjs` and/or a
+   docker-compose file need to actually exist and start Control + 3
+   simulated Agents + API + Dashboard with one command.

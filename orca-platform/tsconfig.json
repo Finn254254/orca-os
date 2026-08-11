@@ -6,6 +6,7 @@
     { "path": "security" },
     { "path": "control" },
     { "path": "agent" },
-    { "path": "api" }
+    { "path": "api" },
+    { "path": "cli" }
   ]
 }
