@@ -50,6 +50,8 @@ orca node show  Print the structured local node record
 
 `orca-agent` generates a persistent node ID in `/var/lib/orca/node-id` and publishes a machine-readable local record at `/run/orca/node.json`. This stable interface is the foundation for Milestone 2 node discovery and the later web dashboard.
 
+The local management API serves `GET /healthz` and `GET /v1/node` on `127.0.0.1:9876`. It is intentionally local-only until authenticated remote node management is implemented.
+
 ## Roadmap
 
 1. Bootable x86-64 VM image
