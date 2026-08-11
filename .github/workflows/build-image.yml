@@ -1,0 +1,27 @@
+name: Build Orca OS Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-x86-64:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mkosi and build dependencies
+        run: |
+          pipx install git+https://github.com/systemd/mkosi.git
+          sudo apt-get update
+          mkosi -C build dependencies | xargs -r sudo apt-get install -y
+      - name: Build verified x86-64 image
+        run: make image
+      - name: Upload VM image
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-os-x86-64
+          path: |
+            out/orca-os-x86_64.raw
+            out/orca-os-x86_64.raw.sha256
+          if-no-files-found: error
