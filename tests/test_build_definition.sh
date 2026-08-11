@@ -9,6 +9,8 @@ grep -q 'Format=disk' "$project_root/build/mkosi.conf"
 grep -q 'systemd-boot-efi' "$project_root/build/mkosi.conf"
 grep -q 'Firmware=uefi' "$project_root/build/mkosi.conf"
 grep -q 'SOURCE_DATE_EPOCH' "$project_root/build/build-image.sh"
+verify_output="$($project_root/build/verify-image.sh image.raw --dry-run)"
+grep -q 'GPT and EFI partition' <<<"$verify_output"
 
 vm_root="$(mktemp -d)"
 trap 'rm -rf "$vm_root"' EXIT

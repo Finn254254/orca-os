@@ -26,4 +26,6 @@ SOURCE_DATE_EPOCH="$source_date_epoch" mkosi -C "$project_root/build" -f build \
   --output-directory="$output_dir" \
   --extra-tree="$stage_dir"
 
-echo "Built $output_dir/orca-os-x86_64.raw"
+image="$output_dir/orca-os-x86_64.raw"
+"$project_root/build/verify-image.sh" "$image"
+echo "Built $image"

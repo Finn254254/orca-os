@@ -21,3 +21,5 @@ jobs:
         run: |
           pipx install git+https://github.com/systemd/mkosi.git
           mkosi -C build summary
+      - name: Validate image verifier entrypoint
+        run: build/verify-image.sh image.raw --dry-run

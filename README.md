@@ -18,6 +18,8 @@ Build an x86-64 raw disk image on a Linux host with [mkosi](https://github.com/s
 make image
 ```
 
+The build verifies that the artifact is a GPT image with an EFI System Partition and writes a SHA-256 checksum beside it.
+
 Run the resulting image with QEMU:
 
 ```bash
