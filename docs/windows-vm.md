@@ -8,7 +8,7 @@ Install [QEMU for Windows](https://www.qemu.org/download/#windows) and add its i
 
 ```powershell
 qemu-system-x86_64.exe `
-  -machine q35,accel:whpx `
+  -machine q35,accel=whpx `
   -cpu max `
   -m 2048 `
   -smp 2 `
@@ -17,7 +17,7 @@ qemu-system-x86_64.exe `
   -serial mon:stdio
 ```
 
-Enable **Windows Hypervisor Platform** in Windows Features before using `accel:whpx`. If it is unavailable, replace `accel:whpx` with `accel:tcg`; it will be slower but works without virtualization acceleration.
+Enable **Windows Hypervisor Platform** in Windows Features before using `accel=whpx`. If it is unavailable, replace `accel=whpx` with `accel=tcg`; it will be slower but works without virtualization acceleration.
 
 After logging in, verify the Milestone 1 components:
 

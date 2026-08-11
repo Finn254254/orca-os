@@ -16,3 +16,7 @@ jobs:
       - name: Validate shell syntax
         run: |
           find build cli services tools tests vm -type f -print0 | xargs -0 -n1 bash -n
+      - name: Validate the mkosi configuration
+        run: |
+          pipx install mkosi
+          mkosi -C build summary

@@ -4,6 +4,7 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_dir="${ORCA_OUTPUT_DIR:-$project_root/out}"
 stage_dir="${ORCA_STAGE_DIR:-$output_dir/stage-rootfs}"
+source_date_epoch="${SOURCE_DATE_EPOCH:-0}"
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'mkosi build definition: %s\n' "$project_root/build/mkosi.conf"
@@ -21,7 +22,7 @@ mkdir -p "$stage_dir"
 "$project_root/tools/install-rootfs.sh" "$stage_dir"
 
 mkdir -p "$output_dir"
-mkosi -C "$project_root/build" build \
+SOURCE_DATE_EPOCH="$source_date_epoch" mkosi -C "$project_root/build" -f build \
   --output-directory="$output_dir" \
   --extra-tree="$stage_dir"
 
