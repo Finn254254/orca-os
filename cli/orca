@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ORCA_ROOT="${ORCA_ROOT:-}"
+if [[ -n "$ORCA_ROOT" ]]; then
+  release_file="$ORCA_ROOT/etc/orca-release"
+  os_release_file="$ORCA_ROOT/etc/os-release"
+  runtime_dir="$ORCA_ROOT/run/orca"
+  state_dir="$ORCA_ROOT/var/lib/orca"
+else
+  release_file="/etc/orca-release"
+  os_release_file="/etc/os-release"
+  runtime_dir="/run/orca"
+  state_dir="/var/lib/orca"
+fi
+
+read_value() {
+  local key="$1" file="$2"
+  [[ -r "$file" ]] || return 0
+  awk -F= -v key="$key" '$1 == key { value=substr($0, length(key) + 2); gsub(/^"|"$/, "", value); print value; exit }' "$file"
+}
+
+orca_version() {
+  read_value VERSION "$release_file"
+}
+
+command_info() {
+  local hostname kernel os_name architecture cpu_model cpu_cores memory_mib virtualization
+  hostname="$(hostname 2>/dev/null || printf unknown)"
+  kernel="$(uname -r 2>/dev/null || printf unknown)"
+  architecture="$(uname -m 2>/dev/null || printf unknown)"
+  os_name="$(read_value PRETTY_NAME "$release_file")"
+  cpu_model="$(awk -F: '/model name/ { sub(/^ /, "", $2); print $2; exit }' /proc/cpuinfo 2>/dev/null || true)"
+  cpu_cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf unknown)"
+  memory_mib="$(awk '/MemTotal/ { printf "%d", $2 / 1024; exit }' /proc/meminfo 2>/dev/null || true)"
+  virtualization="$(systemd-detect-virt 2>/dev/null || printf physical)"
+  [[ -n "$os_name" ]] || os_name="Orca OS"
+  [[ -n "$cpu_model" ]] || cpu_model="unknown"
+  [[ -n "$memory_mib" ]] || memory_mib="unknown"
+
+  cat <<EOF
+Orca OS Information
+Name: $os_name
+Version: $(orca_version)
+Hostname: $hostname
+Architecture: $architecture
+Kernel: $kernel
+CPU: $cpu_model
+CPU Cores: $cpu_cores
+Memory MiB: $memory_mib
+Virtualization: $virtualization
+EOF
+}
+
+command_status() {
+  if [[ "${1:-}" == "--json" ]]; then
+    if [[ -r "$runtime_dir/node.json" ]]; then
+      cat "$runtime_dir/node.json"
+    else
+      printf '{"schemaVersion":1,"agent":"inactive"}\n'
+    fi
+    return
+  fi
+  local status_file="$runtime_dir/agent.status"
+  echo "Orca Node Status"
+  if [[ -r "$status_file" ]]; then
+    cat "$status_file"
+  else
+    echo "Agent: inactive"
+    echo "Node ID: unavailable"
+  fi
+}
+
+command_node() {
+  local node_id_file="$state_dir/node-id"
+
+  case "${1:-}" in
+    id)
+      [[ -r "$node_id_file" ]] && cat "$node_id_file" || {
+        echo "Node identity is not initialized. Start orca-agent first." >&2
+        return 1
+      }
+      ;;
+    show)
+      [[ -r "$runtime_dir/node.json" ]] && cat "$runtime_dir/node.json" || {
+        echo "Node status is unavailable. Start orca-agent first." >&2
+        return 1
+      }
+      ;;
+    *)
+      echo "Usage: orca node <id|show>" >&2
+      return 2
+      ;;
+  esac
+}
+
+command_peer() {
+  local peers_dir="$state_dir/peers" node_id endpoint peer_file
+  case "${1:-}" in
+    list)
+      shopt -s nullglob
+      local peer_files=("$peers_dir"/*.json)
+      if [[ ${#peer_files[@]} -eq 0 ]]; then
+        echo "No enrolled peers."
+      else
+        cat "${peer_files[@]}"
+      fi
+      ;;
+    add)
+      node_id="${2:-}"
+      endpoint="${3:-}"
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      [[ "$endpoint" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,255}$ ]] || { echo "Invalid peer endpoint." >&2; return 2; }
+      mkdir -p "$peers_dir"
+      peer_file="$peers_dir/$node_id.json"
+      printf '{"schemaVersion":1,"nodeId":"%s","endpoint":"%s"}\n' "$node_id" "$endpoint" > "$peer_file"
+      echo "Enrolled peer: $node_id"
+      ;;
+    remove)
+      node_id="${2:-}"
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      rm -f "$peers_dir/$node_id.json"
+      echo "Removed peer: $node_id"
+      ;;
+    *) echo "Usage: orca peer <list|add NODE_ID ENDPOINT|remove NODE_ID>" >&2; return 2 ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage: orca <command>
+
+Commands:
+  info       Print Orca and operating-system information
+  status     Print local Orca node status; add --json for structured output
+  node id    Print the persistent local node identity
+  node show  Print the structured local node record
+  peer list  List enrolled peer nodes
+  peer add   Enroll a peer node by ID and endpoint
+  peer remove Remove an enrolled peer node
+  version    Print the Orca OS version
+EOF
+}
+
+case "${1:-}" in
+  info) command_info ;;
+  status) shift; command_status "$@" ;;
+  node) shift; command_node "$@" ;;
+  peer) shift; command_peer "$@" ;;
+  version) orca_version ;;
+  -h|--help|help|"") usage ;;
+  *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;
+esac

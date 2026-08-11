@@ -1,0 +1,18 @@
+[Unit]
+Description=Orca local management API
+Documentation=https://github.com/Finn254254/orca-os
+After=orca-agent.service
+Wants=orca-agent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/orca/orca-api.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

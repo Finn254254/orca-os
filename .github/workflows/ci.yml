@@ -1,0 +1,25 @@
+name: Orca OS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run host-side integration tests
+        run: make test
+      - name: Validate shell syntax
+        run: |
+          bash -n build/*.sh cli/orca services/orca-agent tools/*.sh tests/*.sh vm/*.sh
+          python3 -m py_compile services/orca-api.py tests/test_api.py
+      - name: Validate the mkosi configuration
+        run: |
+          pipx install git+https://github.com/systemd/mkosi.git
+          mkosi -C build summary
+      - name: Validate image verifier entrypoint
+        run: build/verify-image.sh image.raw --dry-run
