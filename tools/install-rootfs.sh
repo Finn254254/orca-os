@@ -10,6 +10,8 @@ install -Dm755 "$project_root/services/orca-api.py" "$rootfs/usr/lib/orca/orca-a
 install -Dm644 "$project_root/services/orca-agent.service" "$rootfs/usr/lib/systemd/system/orca-agent.service"
 install -Dm644 "$project_root/services/orca-api.service" "$rootfs/usr/lib/systemd/system/orca-api.service"
 install -Dm644 "$project_root/config/etc/orca-release" "$rootfs/etc/orca-release"
+install -Dm644 "$project_root/config/systemd/serial-getty@ttyS0.service.d/orca-autologin.conf" \
+  "$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf"
 
 mkdir -p "$rootfs/etc/systemd/system/multi-user.target.wants"
 ln -sfn /usr/lib/systemd/system/orca-agent.service \

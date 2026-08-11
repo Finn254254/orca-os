@@ -31,7 +31,7 @@ orca status
 systemctl status orca-agent
 ```
 
-The current x86-64 image is a development image and automatically logs root into the local VM console. Do not expose its console or use this image as a production host. Production authentication is an Orca OS hardening milestone.
+The current x86-64 image is a development image and automatically logs root into the local QEMU serial console. Do not expose its console or use this image as a production host. Production authentication is an Orca OS hardening milestone.
 
 From Windows, once SSH is configured in the VM, connect with:
 

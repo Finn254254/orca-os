@@ -10,6 +10,7 @@ required_files=(
   /usr/lib/orca/orca-api.py
   /usr/lib/systemd/system/orca-agent.service
   /usr/lib/systemd/system/orca-api.service
+  /etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf
 )
 
 for file in "${required_files[@]}"; do
