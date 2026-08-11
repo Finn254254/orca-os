@@ -7,6 +7,13 @@ trap 'rm -rf "$rootfs"' EXIT
 
 "$project_root/tools/install-rootfs.sh" "$rootfs"
 "$project_root/tools/verify-rootfs.sh" "$rootfs"
+if sed 's/--autologin root/--login-options/' "$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf" > "$rootfs/bad.conf"; then
+  mv "$rootfs/bad.conf" "$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf"
+fi
+if "$project_root/tools/verify-rootfs.sh" "$rootfs" >/dev/null 2>&1; then
+  echo 'rootfs verifier accepted a missing serial autologin override' >&2
+  exit 1
+fi
 test -x "$rootfs/usr/local/bin/orca"
 test -x "$rootfs/usr/lib/orca/orca-agent"
 test -x "$rootfs/usr/lib/orca/orca-api.py"

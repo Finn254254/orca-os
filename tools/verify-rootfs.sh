@@ -29,4 +29,10 @@ for unit in orca-agent orca-api; do
   }
 done
 
+serial_override="$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf"
+grep -q -- '--autologin root' "$serial_override" || {
+  echo "Serial console autologin is not configured." >&2
+  exit 1
+}
+
 echo "Rootfs verification passed."
