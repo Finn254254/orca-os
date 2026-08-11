@@ -85,7 +85,7 @@ export class MeshClient extends EventEmitter {
       } else if (message.type === "command") {
         this.emit("command", message.command);
       } else if (message.type === "error") {
-        this.log().warn("mesh client received error", message.message);
+        this.log().warn({ message: message.message }, "mesh client received error from server");
       }
     });
 

@@ -3,6 +3,7 @@
   "references": [
     { "path": "shared" },
     { "path": "mesh" },
-    { "path": "control" }
+    { "path": "control" },
+    { "path": "agent" }
   ]
 }

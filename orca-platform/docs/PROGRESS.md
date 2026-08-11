@@ -4,7 +4,8 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-Phase 2 complete (Orca Control), moving into Phase 3 (Orca Agent).
+Phases 1-4 complete (scaffolding, shared libs, mesh, Control, Agent,
+end-to-end wiring). Moving into Phase 5 (Orca API).
 
 ## Completed
 
@@ -50,13 +51,48 @@ Phase 2 complete (Orca Control), moving into Phase 3 (Orca Agent).
       round-trip, unknown-node command rejection, persistence across
       restart).
 
+- **Phase 3 — Orca Agent**
+  - `@orca/agent`: per-node daemon. `MetricsProvider` interface with two
+    implementations — `RealMetricsProvider` (via `systeminformation`: CPU,
+    RAM, disk, network, GPU where present, CPU temperature, OS info, uptime;
+    verified working against this container's real host) and
+    `SimulatedMetricsProvider` (schema-valid, jittered synthetic metrics for
+    the multi-node dev cluster, with a tunable profile — CPU cores, RAM,
+    optional GPU).
+  - Node identity persisted to disk (`identity.json`) so restarts keep the
+    same node id.
+  - Command execution: `ping`, `start_service`/`stop_service`/
+    `restart_service` (via `systemctl`), `shell` (opt-in via
+    `ORCA_ALLOW_SHELL_COMMANDS`, off by default), `power` (opt-in via
+    `ORCA_ALLOW_POWER_COMMANDS`; simulated nodes always simulate it so the
+    dev cluster can never actually reboot the host machine).
+  - Tests: 6 passing (capabilities/metrics/services schema validity, ram
+    bounds under repeated sampling, registration + heartbeat delivery
+    against a real `MeshServer`, ping round-trip, shell-disabled-by-default,
+    simulated power command).
+
+- **Phase 4 — End-to-end wiring**
+  - `orca-platform/tests` workspace: a true end-to-end test
+    (`tests/e2e/control-agent.test.ts`) that spawns **real** `orca-control`
+    and `orca-agent` child processes (via `tsx`, not in-process doubles) and
+    drives them over HTTP/WebSocket exactly as they'd run in the dev
+    cluster: registration, live metrics appearing over HTTP, a `ping`
+    command round-trip against the real agent process, and offline
+    detection when the agent process is killed.
+  - Found and fixed a real bug this test caught: `SimulatedMetricsProvider`
+    merged its profile with `{...DEFAULT_PROFILE, ...profile}`, and
+    `agent/src/index.ts` was passing explicit `cpuCores: undefined` /
+    `ramTotalBytes: undefined` for unset env vars — object spread lets a
+    later explicit `undefined` clobber an earlier default, so simulated
+    nodes were silently registering with no CPU/RAM capabilities. Fixed by
+    filtering `undefined` overrides out before merging. Also fixed a pino
+    logging call (`warn("msg", extraArg)`) that was silently swallowing the
+    mesh client's error text, which is what made the original bug hard to
+    see in the first place.
+
 ## Partially completed / next up
 
-- **Phase 3 — Orca Agent**: not started. Will use `systeminformation` for
-  host metrics (CPU/RAM/disk/network; GPU/temperature where available),
-  wrap `@orca/mesh`'s `MeshClient`, and support a "simulated" mode (synthetic
-  metrics with configurable jitter) for the multi-node dev cluster.
-- Phases 4-24: not started (see `orca-platform/README.md` for the full
+- Phases 5-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
 
 ## Tests
@@ -68,7 +104,8 @@ references list — **remember to add new packages to that references array
 as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
-All tests currently green: `shared` (7), `mesh` (4), `control` (6) = 17/17.
+All tests currently green: `shared` (7), `mesh` (4), `control` (6),
+`agent` (6), `tests` e2e (1) = 24/24.
 
 ## Known limitations
 
@@ -100,9 +137,7 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Build `@orca/agent` (Phase 3): host metrics collection, mesh client
-   wiring, command execution, simulated-node mode.
-2. Wire end-to-end registration/heartbeat/metrics (Phase 4) and add an
-   integration test that runs Control + a real Agent process together.
-3. Orca API (Phase 5), CLI (Phase 6), Dashboard (Phase 7), then the
-   multi-node simulation environment and first demo (Phase 8).
+1. Orca API (Phase 5): versioned REST aggregating Control (+ later
+   compute/scheduler/models), realtime WebSocket channel, API docs.
+2. Orca CLI (Phase 6), Orca Dashboard (Phase 7).
+3. Multi-node simulation environment + first demo (Phase 8).
