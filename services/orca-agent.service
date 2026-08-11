@@ -11,11 +11,14 @@ Restart=always
 RestartSec=5
 RuntimeDirectory=orca
 RuntimeDirectoryMode=0755
+StateDirectory=orca
+StateDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/run/orca
+ReadWritePaths=/var/lib/orca
 
 [Install]
 WantedBy=multi-user.target

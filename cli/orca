@@ -51,6 +51,14 @@ EOF
 }
 
 command_status() {
+  if [[ "${1:-}" == "--json" ]]; then
+    if [[ -r "$runtime_dir/node.json" ]]; then
+      cat "$runtime_dir/node.json"
+    else
+      printf '{"schemaVersion":1,"agent":"inactive"}\n'
+    fi
+    return
+  fi
   local status_file="$runtime_dir/agent.status"
   echo "Orca Node Status"
   if [[ -r "$status_file" ]]; then
@@ -61,20 +69,51 @@ command_status() {
   fi
 }
 
+command_node() {
+  local node_id_file
+  if [[ -n "$ORCA_ROOT" ]]; then
+    node_id_file="$ORCA_ROOT/var/lib/orca/node-id"
+  else
+    node_id_file="/var/lib/orca/node-id"
+  fi
+
+  case "${1:-}" in
+    id)
+      [[ -r "$node_id_file" ]] && cat "$node_id_file" || {
+        echo "Node identity is not initialized. Start orca-agent first." >&2
+        return 1
+      }
+      ;;
+    show)
+      [[ -r "$runtime_dir/node.json" ]] && cat "$runtime_dir/node.json" || {
+        echo "Node status is unavailable. Start orca-agent first." >&2
+        return 1
+      }
+      ;;
+    *)
+      echo "Usage: orca node <id|show>" >&2
+      return 2
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: orca <command>
 
 Commands:
   info       Print Orca and operating-system information
-  status     Print local Orca node status
+  status     Print local Orca node status; add --json for structured output
+  node id    Print the persistent local node identity
+  node show  Print the structured local node record
   version    Print the Orca OS version
 EOF
 }
 
 case "${1:-}" in
   info) command_info ;;
-  status) command_status ;;
+  status) shift; command_status "$@" ;;
+  node) shift; command_node "$@" ;;
   version) orca_version ;;
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;

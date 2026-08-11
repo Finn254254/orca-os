@@ -44,7 +44,11 @@ The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 orca info       Print Orca and operating-system identity
 orca status     Show Orca service and node status
 orca version    Print the Orca OS version
+orca node id    Print the persistent node identity
+orca node show  Print the structured local node record
 ```
+
+`orca-agent` generates a persistent node ID in `/var/lib/orca/node-id` and publishes a machine-readable local record at `/run/orca/node.json`. This stable interface is the foundation for Milestone 2 node discovery and the later web dashboard.
 
 ## Roadmap
 
