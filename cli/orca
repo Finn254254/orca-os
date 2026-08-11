@@ -126,6 +126,22 @@ command_peer() {
   esac
 }
 
+command_doctor() {
+  local unit_file="$ORCA_ROOT/usr/lib/systemd/system/orca-agent.service"
+  local enabled_unit="$ORCA_ROOT/etc/systemd/system/multi-user.target.wants/orca-agent.service"
+  [[ -n "$ORCA_ROOT" ]] || {
+    unit_file="/usr/lib/systemd/system/orca-agent.service"
+    enabled_unit="/etc/systemd/system/multi-user.target.wants/orca-agent.service"
+  }
+
+  echo "Orca OS Diagnostics"
+  [[ -r "$release_file" ]] && echo "Release: ok" || { echo "Release: missing"; return 1; }
+  [[ -x "${ORCA_ROOT}/usr/local/bin/orca" || -z "$ORCA_ROOT" ]] && echo "CLI: ok" || { echo "CLI: missing"; return 1; }
+  [[ -f "$unit_file" ]] && echo "Agent unit: ok" || { echo "Agent unit: missing"; return 1; }
+  [[ -L "$enabled_unit" ]] && echo "Agent enabled: ok" || { echo "Agent enabled: missing"; return 1; }
+  [[ -r "$runtime_dir/node.json" ]] && echo "Node record: available" || echo "Node record: unavailable"
+}
+
 usage() {
   cat <<'EOF'
 Usage: orca <command>
@@ -138,6 +154,7 @@ Commands:
   peer list  List enrolled peer nodes
   peer add   Enroll a peer node by ID and endpoint
   peer remove Remove an enrolled peer node
+  doctor     Check the local Orca OS installation
   version    Print the Orca OS version
 EOF
 }
@@ -147,6 +164,7 @@ case "${1:-}" in
   status) shift; command_status "$@" ;;
   node) shift; command_node "$@" ;;
   peer) shift; command_peer "$@" ;;
+  doctor) command_doctor ;;
   version) orca_version ;;
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;
