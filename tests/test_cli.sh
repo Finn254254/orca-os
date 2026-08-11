@@ -30,6 +30,13 @@ grep -q '"nodeId":"test-node"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/o
 [[ "$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" node id)" == "test-node" ]]
 grep -q '"agent":"active"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" node show)"
 grep -q 'Agent enabled: ok' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" doctor)"
+rm "$temp_root/usr/local/bin/orca"
+if ORCA_ROOT="$temp_root" "$project_root/cli/orca" doctor >/dev/null 2>&1; then
+  echo 'doctor unexpectedly passed with a missing CLI' >&2
+  exit 1
+fi
+cp "$project_root/cli/orca" "$temp_root/usr/local/bin/orca"
+chmod +x "$temp_root/usr/local/bin/orca"
 ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer add peer-one 10.0.0.2:9876 >/dev/null
 grep -q '"nodeId":"peer-one"' <<<"$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer list)"
 ORCA_ROOT="$temp_root" "$project_root/cli/orca" peer remove peer-one >/dev/null
