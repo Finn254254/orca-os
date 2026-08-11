@@ -19,6 +19,7 @@ make image
 ```
 
 The build verifies that the artifact is a GPT image with an EFI System Partition and writes a SHA-256 checksum beside it.
+Before image creation, it also verifies the staged root filesystem contains and enables every Orca system component.
 
 Run the resulting image with QEMU:
 

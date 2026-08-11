@@ -20,6 +20,7 @@ command -v mkosi >/dev/null || {
 rm -rf "$stage_dir"
 mkdir -p "$stage_dir"
 "$project_root/tools/install-rootfs.sh" "$stage_dir"
+"$project_root/tools/verify-rootfs.sh" "$stage_dir"
 
 mkdir -p "$output_dir"
 SOURCE_DATE_EPOCH="$source_date_epoch" mkosi -C "$project_root/build" -f build \

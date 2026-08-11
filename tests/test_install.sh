@@ -6,6 +6,7 @@ rootfs="$(mktemp -d)"
 trap 'rm -rf "$rootfs"' EXIT
 
 "$project_root/tools/install-rootfs.sh" "$rootfs"
+"$project_root/tools/verify-rootfs.sh" "$rootfs"
 test -x "$rootfs/usr/local/bin/orca"
 test -x "$rootfs/usr/lib/orca/orca-agent"
 test -x "$rootfs/usr/lib/orca/orca-api.py"
