@@ -1,0 +1,44 @@
+{
+  "name": "orca-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Orca Platform: the software stack above Orca OS (control plane, agent, mesh, API, CLI, dashboard, compute, scheduler, models, AI gateway, deploy, storage, hardware daemon, update, backup, security, AI apps, studio, app backend).",
+  "workspaces": [
+    "shared",
+    "mesh",
+    "security",
+    "control",
+    "agent",
+    "hardware-daemon",
+    "compute",
+    "scheduler",
+    "models",
+    "ai-gateway",
+    "deploy",
+    "storage",
+    "update",
+    "backup",
+    "api",
+    "cli",
+    "app-backend",
+    "dashboard",
+    "ai",
+    "studio",
+    "tests"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "dev:cluster": "node scripts/dev-cluster.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
