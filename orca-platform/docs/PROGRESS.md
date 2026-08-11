@@ -4,8 +4,8 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-Phases 1-4 complete (scaffolding, shared libs, mesh, Control, Agent,
-end-to-end wiring). Moving into Phase 5 (Orca API).
+Phases 1-5 complete (scaffolding, shared libs, mesh, Control, Agent,
+end-to-end wiring, Orca API + security). Moving into Phase 6 (Orca CLI).
 
 ## Completed
 
@@ -90,10 +90,33 @@ end-to-end wiring). Moving into Phase 5 (Orca API).
     mesh client's error text, which is what made the original bug hard to
     see in the first place.
 
+- **Phase 5 — Orca API**
+  - `@orca/security`: durable `UserStore` (salted+hashed passwords, no
+    plaintext, admin bootstrap only when no users exist yet — never a
+    hard-coded default account) and stateless HMAC-signed session tokens.
+  - `@orca/api`: versioned REST under `/api/v1` — `auth` (login/me),
+    `users` (admin-only CRUD), `nodes`/`nodes/:id`/`nodes/:id/metrics`/
+    `nodes/:id/commands` (proxying Control, command POST requires
+    admin/operator role), `commands`, `cluster/config`, `cluster/groups`.
+    Realtime `/ws` WebSocket broadcasting `node`/`metrics` events (sourced
+    by polling Control and diffing — `job`/`log`/`alert` channels will
+    light up once those subsystems exist). Hand-maintained OpenAPI document
+    at `/api/v1/openapi.json`, kept in sync with each route file.
+  - Auth: every route but `/auth/login`, `/health`, `/openapi.json`
+    requires a bearer session token; role-based access via `requireRole`.
+  - Tests: 6 passing (admin bootstrap + session token, invalid credentials,
+    401 without auth, Control-proxied node visibility after a real mesh
+    registration, role enforcement for commands/users, OpenAPI served).
+
 ## Partially completed / next up
 
-- Phases 5-24: not started (see `orca-platform/README.md` for the full
+- Phases 6-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
+  Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
+  intentionally *not* in the API yet — they'll be added alongside the
+  Compute/Scheduler/Model Manager/Deploy/Storage subsystems that back them
+  (Phases 9-14), rather than stubbed out now with no real implementation
+  behind them.
 
 ## Tests
 
@@ -104,8 +127,8 @@ references list — **remember to add new packages to that references array
 as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
-All tests currently green: `shared` (7), `mesh` (4), `control` (6),
-`agent` (6), `tests` e2e (1) = 24/24.
+All tests currently green: `shared` (7), `mesh` (4), `security` (6),
+`control` (6), `agent` (6), `api` (6), `tests` e2e (1) = 36/36.
 
 ## Known limitations
 
@@ -117,8 +140,14 @@ All tests currently green: `shared` (7), `mesh` (4), `control` (6),
   plaintext `ws://` for now); `wss://` + certificate handling is deferred to
   the Security phase.
 - Express 5's route params are typed `string | string[]` (repeating params
-  support); Control's HTTP layer narrows with a small `param()` helper since
-  none of its routes use repeating params.
+  support); Control's and API's HTTP layers narrow with a small `param()`
+  helper since none of their routes use repeating params.
+- Session tokens are stateless (self-verifying HMAC, expiring) with no
+  server-side session store — logout is client-side only, no revocation
+  list yet. Fine for the MVP; revisit alongside the broader Security phase.
+- Orca API's realtime channel is poll-and-diff against Control (not a
+  push-based event bus across process boundaries) — simple and reliable for
+  MVP scale; would need revisiting for a large cluster.
 
 ## Architecture decisions
 
@@ -137,7 +166,7 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca API (Phase 5): versioned REST aggregating Control (+ later
-   compute/scheduler/models), realtime WebSocket channel, API docs.
-2. Orca CLI (Phase 6), Orca Dashboard (Phase 7).
+1. Orca CLI (Phase 6): `orca status/nodes/node/metrics/models/jobs/logs/
+   services/version` talking to Orca API.
+2. Orca Dashboard (Phase 7): React admin UI over Orca API + `/ws`.
 3. Multi-node simulation environment + first demo (Phase 8).

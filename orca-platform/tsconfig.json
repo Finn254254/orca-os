@@ -3,7 +3,9 @@
   "references": [
     { "path": "shared" },
     { "path": "mesh" },
+    { "path": "security" },
     { "path": "control" },
-    { "path": "agent" }
+    { "path": "agent" },
+    { "path": "api" }
   ]
 }
