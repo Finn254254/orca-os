@@ -30,7 +30,10 @@ Cluster (proxies Orca Control): `GET/PUT /cluster/config`,
 Subsystems mounted as libraries (see each package's own README for detail):
 `/jobs` (`@orca/compute`), `/models` (`@orca/models`), `/ai` (`@orca/ai-gateway`,
 OpenAI-compatible), `/apps` (`@orca/deploy`), `/storage` (`@orca/storage`),
-`/updates` (`@orca/update`), `/backups` (`@orca/backup`).
+`/updates` (`@orca/update`), `/backups` (`@orca/backup`), `/app`
+(`@orca/app-backend` — mobile/desktop client support: server discovery,
+cluster summary, notifications, device registry; `/app/discover` is the
+one route in this API that's intentionally unauthenticated).
 
 Orca AI and Orca Studio's backends live directly in this package rather
 than as separate `@orca/*` libraries, since every resource they expose is

@@ -16,6 +16,7 @@
     { "path": "storage" },
     { "path": "hardware-daemon" },
     { "path": "update" },
-    { "path": "backup" }
+    { "path": "backup" },
+    { "path": "app-backend" }
   ]
 }

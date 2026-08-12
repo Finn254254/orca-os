@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { AiGatewayService, createAiGatewayRouter } from "@orca/ai-gateway";
+import { AppBackendService, DeviceStore, NotificationStore, createAppBackendRouter } from "@orca/app-backend";
 import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/compute";
 import { AppStore, DeployService, createAppsRouter, startDeployPoller } from "@orca/deploy";
 import { BackupService, BackupStore, createBackupRouter, startBackupScheduler } from "@orca/backup";
@@ -44,6 +45,7 @@ export interface ApiServerHandle {
   aiGateway: AiGatewayService;
   conversations: ConversationStore;
   studio: StudioService;
+  appBackend: AppBackendService;
   realtime: RealtimeHub;
   logger: Logger;
   close: () => Promise<void>;
@@ -135,6 +137,17 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     logger,
   });
 
+  const appNotifications = new NotificationStore(join(config.dataDir, "app"));
+  await appNotifications.init();
+  const appDevices = new DeviceStore(join(config.dataDir, "app"));
+  await appDevices.init();
+  const appBackend = new AppBackendService({
+    cluster: control,
+    users: { listUserIds: () => users.listUsers().map((u) => u.id) },
+    notifications: appNotifications,
+    devices: appDevices,
+  });
+
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -168,6 +181,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     createConversationsRouter(conversations, aiGateway),
   );
   app.use("/api/v1/studio", requireAuth(config.sessionSecret), createStudioRouter(studio));
+  app.use("/api/v1/app", createAppBackendRouter(appBackend, requireAuth(config.sessionSecret), requireRole("admin", "operator")));
   app.use(
     "/api/v1/apps",
     requireAuth(config.sessionSecret),
@@ -218,6 +232,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     aiGateway,
     conversations,
     studio,
+    appBackend,
     realtime,
     logger,
     close: async () => {

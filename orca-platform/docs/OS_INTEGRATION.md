@@ -59,3 +59,15 @@ requirements list, not a to-do list to blindly implement.
   configured URL over TCP. Orca OS should ensure outbound connectivity (and
   ideally mDNS/local DNS for `orca-control.local`-style discovery) is
   available by default on Orca nodes.
+
+## App Backend (mobile/desktop client discovery)
+
+- `GET /api/v1/app/discover` (unauthenticated) lets a mobile/desktop
+  client verify a server it already has an address for, but Orca Platform
+  doesn't broadcast that address — a client currently needs one entered
+  manually (IP/hostname, or a QR code generated out-of-band). Real
+  zero-configuration discovery (a client on the same LAN finding an Orca
+  API server with no address at all) needs Orca OS to advertise a service
+  over mDNS/Bonjour (e.g. `_orca-api._tcp.local`) so `/app/discover` has
+  something to be reached through in the first place. Until that exists,
+  "discovery" here means "verify," not "find."

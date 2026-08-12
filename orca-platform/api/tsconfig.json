@@ -16,7 +16,8 @@
     { "path": "../deploy" },
     { "path": "../storage" },
     { "path": "../update" },
-    { "path": "../backup" }
+    { "path": "../backup" },
+    { "path": "../app-backend" }
   ],
   "include": ["src"]
 }

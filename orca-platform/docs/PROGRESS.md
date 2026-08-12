@@ -4,7 +4,7 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-20 complete.** Moving into Phase 21 (App Backend).
+**Phases 1-21 complete.** Moving into Phase 22 (full integration tests).
 
 ## Completed
 
@@ -518,9 +518,69 @@ Last updated: 2026-08-12 (autonomous build session).
     same way: a real end-to-end test driving the actual UI, not a unit
     test with synchronous fixture data.
 
+- **Phase 21 — App Backend**
+  - `@orca/app-backend`: a real standalone package (not folded into
+    `@orca/api` like Orca AI/Studio's backends) — reserved as its own
+    workspace from Phase 1's scaffolding, and unlike those two it has no
+    frontend counterpart in this repo to make sharing implementation with
+    `api/` the more natural home; it's a genuine subsystem `@orca/api`
+    mounts, same shape as `@orca/compute`/`@orca/deploy`/`@orca/update`.
+  - Explicitly **not** a duplicate of what already exists: auth, AI
+    conversations, and nodes/apps/models/jobs are already real REST
+    resources at `/api/v1/*` that a mobile/desktop client uses directly.
+    This package covers only the genuinely mobile-specific pieces:
+    - **Server discovery** (`GET /api/v1/app/discover`, the one
+      unauthenticated route under `/api/v1/app`): identity check
+      (service/clusterName/apiVersion/serverTime) so a client can verify
+      it found a real Orca server before it has a session token. Real
+      network-level discovery (mDNS/Bonjour, so a client doesn't need a
+      manually-entered address) needs OS-level support and isn't built —
+      documented as an OS integration requirement, not implemented here.
+    - **Cluster summary** (`GET /api/v1/app/summary`, authenticated): one
+      compact request (node counts, average CPU/RAM across nodes that
+      have reported metrics) instead of a mobile client fetching and
+      aggregating `/nodes` itself.
+    - **Notifications** (`/api/v1/app/notifications`): a per-user inbox.
+      Admin/operator can send to one user or broadcast to every known
+      user (`POST`, gated by `writeGuard`); any user lists/marks their
+      own read. Real production use: system-wide announcements
+      ("cluster restarting at 10pm") — not a synthetic feature.
+    - **Device registry** (`/api/v1/app/devices`): register a push token
+      (platform + opaque token) per user. This is the registry a real
+      push relay (APNs/FCM) would read from to actually deliver
+      notifications — **that delivery step is not implemented**;
+      registering a device today only makes it visible via the API. No
+      subsystem currently auto-generates notifications from job/deploy/
+      backup/update completions either, since none of those track a
+      submitting user yet (they're cluster-wide admin/operator actions,
+      not user-attributed) — wiring that up would mean changing already-
+      shipped schemas across multiple tested packages, a larger and
+      riskier change than this phase's honest scope.
+  - `AppBackendService` takes two narrow structural ports — `ClusterPort`
+    (`getClusterConfig`/`listNodes`, satisfied directly by
+    `api/src/controlClient.ts`'s existing `ControlClient` — no adapter
+    needed) and `UserDirectory` (`listUserIds`, a one-line adapter over
+    `@orca/security`'s `UserStore`) — the same `ControlPort`-style pattern
+    used by Compute/Deploy/Update, so this package never depends on
+    those packages' full surface.
+  - `createAppBackendRouter` takes `requireAuth`/`writeGuard` and applies
+    them **per-route** (not at the `app.use()` mount level, unlike every
+    other router) specifically so `/discover` can stay public while
+    every other `/api/v1/app` route requires a session — the router is
+    still mounted as a single unit in `api/src/server.ts`.
+  - Tests: 7 in `app-backend/src/appBackendService.test.ts` (discovery,
+    summary aggregation including "no metrics yet" and "some nodes
+    missing metrics", per-user notification CRUD + broadcast, device
+    ownership) + 5 in `app-backend/src/routes.test.ts` (router contract
+    with fake auth middleware) + 4 in `api/src/appBackend.test.ts` (full
+    HTTP-level coverage against a real Control + API: unauthenticated
+    discover reflecting the real cluster name, 401/200 on summary, a
+    real second user receiving and reading a broadcast, a viewer
+    correctly forbidden from sending one, device register/list/delete).
+
 ## Partially completed / next up
 
-- Phases 21-24: not started (see `orca-platform/README.md` for the full
+- Phases 22-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
 
 ## Tests
@@ -535,9 +595,9 @@ whole-platform build.
 All tests currently green: `shared` (7), `mesh` (4), `security` (10),
 `control` (12), `agent` (12), `compute` (11), `scheduler` (10), `models`
 (21), `ai-gateway` (16), `deploy` (11), `storage` (11),
-`hardware-daemon` (16), `update` (18), `backup` (13), `api` (30),
-`cli` (7), `dashboard` (9), `ai` (17), `studio` (9), `tests` e2e (9) =
-253/253.
+`hardware-daemon` (16), `update` (18), `backup` (13), `api` (34),
+`cli` (7), `app-backend` (12), `dashboard` (9), `ai` (17), `studio` (9),
+`tests` e2e (9) = 269/269.
 
 Note: `dashboard/`, `ai/`, and `studio/` are intentionally **not** in the
 root `tsconfig.json` `tsc -b` graph — they're Vite/browser apps with
@@ -574,6 +634,21 @@ Orca AI, and Orca Studio browser tests — not used elsewhere.
 - Orca Studio's workflow engine is a linear pipeline (each step's output
   feeds the next step's input) — not a general DAG with branching/fan-out.
   A real workflow-graph engine is future scope if a use case needs it.
+- App Backend's device registry has no matching push-delivery
+  implementation — registering a device's push token doesn't cause
+  anything to actually be sent to it; a real push relay (APNs/FCM) would
+  need to be built and wired to read from `DeviceStore`.
+- No subsystem auto-generates App Backend notifications from job/deploy/
+  update/backup completions — those records don't track a submitting
+  user yet (cluster-wide admin/operator actions, not user-attributed),
+  so wiring that up would mean changing already-shipped schemas across
+  several tested packages. `POST /api/v1/app/notifications` (admin/
+  operator, to one user or broadcast) is real and works today; automatic
+  producers are future work.
+- App Backend's `/discover` only verifies a server a client already has
+  an address for — it doesn't do network-level discovery (mDNS/Bonjour)
+  so a client could find a server with no address at all. That needs
+  OS-level support; see `docs/OS_INTEGRATION.md`.
 
 ## Architecture decisions
 
@@ -600,8 +675,8 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. App backend (Phase 21): endpoints for future mobile/desktop apps —
-   auth, server discovery, cluster status, AI conversations,
-   notifications, nodes/apps/models/jobs.
-2. Full integration tests (Phase 22), documentation (Phase 23),
-   platform-wide testing/fixes/cleanup (Phase 24).
+1. Full integration tests (Phase 22): cross-subsystem scenarios beyond
+   what each package's own e2e test already covers.
+2. Documentation pass (Phase 23): review every README/doc for accuracy
+   against the final Phase 1-21 state.
+3. Platform-wide testing, fixes, and cleanup (Phase 24).

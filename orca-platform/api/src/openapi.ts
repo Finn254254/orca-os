@@ -111,6 +111,40 @@ export function buildOpenApiSpec(): Record<string, unknown> {
       "/studio/runs/{id}": {
         get: { summary: "Get a run (owner only)", security: [bearerAuth], responses: { "200": { description: "Run" }, "404": { description: "Not found" } } },
       },
+      "/app/discover": {
+        get: {
+          summary: "Unauthenticated server identity check for mobile/desktop clients (before login)",
+          responses: { "200": { description: "Server identity" } },
+        },
+      },
+      "/app/summary": {
+        get: { summary: "Mobile-optimized cluster status rollup (node counts, average CPU/RAM)", security: [bearerAuth], responses: { "200": { description: "Summary" } } },
+      },
+      "/app/notifications": {
+        get: { summary: "List the current user's notifications (?unreadOnly=true to filter)", security: [bearerAuth], responses: { "200": { description: "Notifications" } } },
+        post: {
+          summary: "Send a notification to a user, or broadcast to all users if userId is omitted (admin/operator)",
+          security: [bearerAuth],
+          responses: { "201": { description: "Sent notification(s)" } },
+        },
+      },
+      "/app/notifications/{id}/read": {
+        post: { summary: "Mark a notification read (owner only)", security: [bearerAuth], responses: { "200": { description: "Notification" }, "404": { description: "Not found" } } },
+      },
+      "/app/notifications/read-all": {
+        post: { summary: "Mark all of the current user's notifications read", security: [bearerAuth], responses: { "200": { description: "Count marked" } } },
+      },
+      "/app/devices": {
+        get: { summary: "List the current user's registered devices", security: [bearerAuth], responses: { "200": { description: "Devices" } } },
+        post: {
+          summary: "Register a device's push token (architecture for a future push relay — delivery is not implemented)",
+          security: [bearerAuth],
+          responses: { "201": { description: "Device" } },
+        },
+      },
+      "/app/devices/{id}": {
+        delete: { summary: "Unregister a device (owner only)", security: [bearerAuth], responses: { "204": { description: "Deleted" }, "404": { description: "Not found" } } },
+      },
       "/ai/models": {
         get: { summary: "List available models (OpenAI-compatible)", security: [bearerAuth], responses: { "200": { description: "Model list" } } },
       },

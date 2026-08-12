@@ -427,6 +427,37 @@ export const StudioRunSchema = z.object({
 });
 export type StudioRun = z.infer<typeof StudioRunSchema>;
 
+// ---- App Backend (mobile/desktop client support) ----
+
+export const NotificationKindSchema = z.enum(["job", "deploy", "update", "backup", "alert", "system"]);
+export type NotificationKind = z.infer<typeof NotificationKindSchema>;
+
+export const NotificationRecordSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  kind: NotificationKindSchema,
+  title: z.string(),
+  message: z.string(),
+  data: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string().datetime(),
+  readAt: z.string().datetime().optional(),
+});
+export type NotificationRecord = z.infer<typeof NotificationRecordSchema>;
+
+export const DevicePlatformSchema = z.enum(["ios", "android", "desktop"]);
+export type DevicePlatform = z.infer<typeof DevicePlatformSchema>;
+
+export const DeviceRegistrationSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  platform: DevicePlatformSchema,
+  pushToken: z.string(),
+  label: z.string().optional(),
+  registeredAt: z.string().datetime(),
+  lastSeenAt: z.string().datetime(),
+});
+export type DeviceRegistration = z.infer<typeof DeviceRegistrationSchema>;
+
 // ---- Security / users ----
 
 export const UserRoleSchema = z.enum(["admin", "operator", "viewer"]);
