@@ -10,6 +10,7 @@ required_files=(
   /usr/lib/orca/orca-api.py
   /usr/lib/systemd/system/orca-agent.service
   /usr/lib/systemd/system/orca-api.service
+  /usr/lib/systemd/system/orca-ready.service
   /etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf
 )
 
@@ -21,13 +22,18 @@ done
 [[ -x "$rootfs/usr/lib/orca/orca-agent" ]] || { echo "orca agent is not executable." >&2; exit 1; }
 [[ -x "$rootfs/usr/lib/orca/orca-api.py" ]] || { echo "orca API is not executable." >&2; exit 1; }
 
-for unit in orca-agent orca-api; do
+for unit in orca-agent orca-api orca-ready; do
   enabled="$rootfs/etc/systemd/system/multi-user.target.wants/$unit.service"
   [[ -L "$enabled" ]] || { echo "Unit is not enabled: $unit" >&2; exit 1; }
   [[ "$(readlink "$enabled")" == "/usr/lib/systemd/system/$unit.service" ]] || {
     echo "Unit has an unexpected target: $unit" >&2; exit 1;
   }
 done
+
+grep -q 'ORCA_OS_READY' "$rootfs/usr/lib/systemd/system/orca-ready.service" || {
+  echo "Boot readiness marker is not configured." >&2
+  exit 1
+}
 
 serial_override="$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf"
 grep -q -- '--autologin root' "$serial_override" || {

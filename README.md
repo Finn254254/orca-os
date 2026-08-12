@@ -27,6 +27,12 @@ Run the resulting image with QEMU:
 make vm
 ```
 
+Run the automated headless boot check, which waits for the image's serial readiness marker:
+
+```bash
+make vm-smoke
+```
+
 The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 
 ## Repository layout

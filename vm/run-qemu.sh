@@ -8,6 +8,7 @@ cpus="${ORCA_VM_CPUS:-2}"
 ovmf_code="${ORCA_OVMF_CODE:-}"
 ovmf_vars="${ORCA_OVMF_VARS:-}"
 ovmf_vars_copy="${ORCA_OVMF_VARS_COPY:-$project_root/out/OVMF_VARS.fd}"
+serial="${ORCA_VM_SERIAL:-mon:stdio}"
 
 find_firmware() {
   local candidate
@@ -47,8 +48,12 @@ qemu_args=(
   -drive "if=pflash,format=raw,file=$ovmf_vars_copy"
   -drive "file=$image,format=raw,if=virtio"
   -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22
-  -serial mon:stdio
+  -serial "$serial"
 )
+
+if [[ "${ORCA_VM_HEADLESS:-0}" == "1" ]]; then
+  qemu_args+=( -display none )
+fi
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'qemu-system-x86_64 %q ' "${qemu_args[@]}"

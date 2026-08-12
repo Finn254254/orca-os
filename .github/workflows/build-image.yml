@@ -15,8 +15,11 @@ jobs:
           pipx install git+https://github.com/systemd/mkosi.git
           sudo apt-get update
           mkosi -C build dependencies | xargs -r sudo apt-get install -y
+          sudo apt-get install -y qemu-system-x86 ovmf
       - name: Build verified x86-64 image
         run: sudo env "PATH=$PATH" "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}" make image
+      - name: Smoke-test VM boot
+        run: sudo env "PATH=$PATH" make vm-smoke
       - name: Upload VM image
         uses: actions/upload-artifact@v4
         with:
@@ -24,4 +27,5 @@ jobs:
           path: |
             out/orca-os-x86_64.raw
             out/orca-os-x86_64.raw.sha256
+            out/orca-vm-boot.log
           if-no-files-found: error
