@@ -1,0 +1,14 @@
+[Unit]
+Description=Orca OS offline-capable core readiness marker
+After=orca-first-boot.service orca-agent.service orca-api.service
+Requires=orca-first-boot.service orca-agent.service orca-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/orca/orca-core-ready
+StandardOutput=journal+console
+RemainAfterExit=yes
+TimeoutStartSec=35
+
+[Install]
+WantedBy=multi-user.target

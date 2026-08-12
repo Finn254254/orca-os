@@ -6,18 +6,23 @@
 - create repeatable x86-64 image build
 - boot image in a VM
 - establish Orca hostname and OS identity
-- install and start `orcad`
+- install and start `orca-agent` and `orca-api`
 - implement `orca status`
 - add automated smoke tests
+- stable raw artifact plus persistent/disposable qcow2 overlays
+- Windows QEMU/WHPX launcher with discovered UEFI and Windows profile paths
 
 ## v0.2 Node management
 
 - persistent node identity
-- hardware inventory
-- health metrics
-- local management API
+- hardware inventory (implemented for local nodes)
+- health metrics (implemented for local nodes)
+- local management API (implemented)
+- persistent bearer authentication (implemented)
+- explicit credentialed peer checks (implemented)
+- two-node Windows/WHPX smoke harness (implemented)
 - LAN node discovery
-- trusted-node enrollment
+- encrypted transport and trust bootstrap for physical LANs
 - `orca nodes` and `orca hardware`
 
 ## v0.3 Local AI
@@ -40,8 +45,11 @@
 
 - signed update mechanism
 - rollback/recovery design
-- first ARM64 hardware image
+- first ARM hardware image (initial custom Allwinner V3s target is 32-bit ARM)
 - hardware-specific provisioning
+- production console/SSH policy without development root autologin
+- minimal package manifest and native low-memory management daemon if required
+- watchdog integration and bounded/volatile logging
 
 ## Long term
 

@@ -1,18 +1,26 @@
 [Unit]
 Description=Orca node agent
 Documentation=https://github.com/Finn254254/orca-os
-After=network-online.target
-Wants=network-online.target
+After=orca-first-boot.service
+Wants=orca-first-boot.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
 ExecStart=/usr/lib/orca/orca-agent
-Restart=always
+Group=orca-api
+Restart=on-failure
 RestartSec=5
+OOMPolicy=stop
+MemoryAccounting=true
+CPUAccounting=true
+TasksMax=8
+LimitNOFILE=64
 RuntimeDirectory=orca
-RuntimeDirectoryMode=0755
+RuntimeDirectoryMode=0750
 StateDirectory=orca
-StateDirectoryMode=0700
+StateDirectoryMode=0750
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

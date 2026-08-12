@@ -2,6 +2,11 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null && [[ "${ORCA_VM_FORCE_LINUX:-0}" != "1" ]]; then
+  exec "$project_root/vm/smoke-test-windows.sh" "$@"
+fi
+
 image="${ORCA_IMAGE:-$project_root/out/orca-os-x86_64.raw}"
 log_file="${ORCA_VM_LOG:-$project_root/out/orca-vm-boot.log}"
 boot_timeout="${ORCA_VM_BOOT_TIMEOUT:-120}"

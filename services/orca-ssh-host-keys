@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ssh_keygen_cmd="${ORCA_SSH_KEYGEN:-ssh-keygen}"
+ssh_dir="${ORCA_SSH_DIR:-/etc/ssh}"
+umask 077
+mkdir -p "$ssh_dir"
+shopt -s nullglob
+private_keys=("$ssh_dir"/ssh_host_*_key)
+if (( ${#private_keys[@]} == 0 )); then
+  "$ssh_keygen_cmd" -A
+fi
+private_keys=("$ssh_dir"/ssh_host_*_key)
+(( ${#private_keys[@]} > 0 )) || {
+  echo "No SSH host private keys were generated." >&2
+  exit 1
+}
+chmod 600 "${private_keys[@]}"

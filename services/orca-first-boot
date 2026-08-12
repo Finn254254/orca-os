@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+marker="${ORCA_FIRST_BOOT_MARKER:-/var/lib/orca/first-boot-complete}"
+token_init="${ORCA_TOKEN_INIT:-/usr/lib/orca/orca-token-init}"
+token_file="${ORCA_API_TOKEN_FILE:-/var/lib/orca/api-token}"
+random_ready="${ORCA_RANDOM_READY:-/proc/sys/kernel/random/entropy_avail}"
+random_timeout="${ORCA_RANDOM_TIMEOUT:-30}"
+[[ "$random_timeout" =~ ^[0-9]+$ ]] && ((random_timeout >= 1 && random_timeout <= 300)) || {
+  echo "Invalid random-readiness timeout." >&2
+  exit 2
+}
+
+umask 077
+mkdir -p "$(dirname "$marker")"
+if [[ ! -e "$token_file" ]]; then
+  deadline=$((SECONDS + random_timeout))
+  while [[ -r "$random_ready" ]] && (( $(<"$random_ready") < 256 )) && ((SECONDS < deadline)); do
+    sleep 1
+  done
+  if [[ -r "$random_ready" ]] && (( $(<"$random_ready") < 256 )); then
+    echo "Kernel random generator did not become ready within ${random_timeout}s." >&2
+    exit 1
+  fi
+fi
+"$token_init" "$token_file"
+
+if [[ ! -e "$marker" ]]; then
+  printf 'completed=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
+fi

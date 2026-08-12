@@ -1,0 +1,21 @@
+[Unit]
+Description=Initialize per-node SSH host keys
+ConditionPathExistsGlob=!/etc/ssh/ssh_host_*_key
+Before=ssh.service
+PartOf=ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/orca/orca-ssh-host-keys
+UMask=0077
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/etc/ssh
+MemoryAccounting=true
+CPUAccounting=true
+TasksMax=8
+LimitNOFILE=64
+
+[Install]
+WantedBy=multi-user.target

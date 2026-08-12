@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+runtime_dir="${ORCA_RUNTIME_DIR:-/run/orca}"
+token_file="${ORCA_API_TOKEN_FILE:-/var/lib/orca/api-token}"
+curl_cmd="${ORCA_CURL:-curl}"
+timeout_seconds="${ORCA_CORE_READY_TIMEOUT:-30}"
+[[ "$timeout_seconds" =~ ^[0-9]+$ ]] && ((timeout_seconds >= 1 && timeout_seconds <= 300)) || {
+  echo "Invalid Orca core readiness timeout." >&2
+  exit 2
+}
+
+deadline=$((SECONDS + timeout_seconds))
+while ((SECONDS < deadline)); do
+  if [[ -s "$runtime_dir/node.json" && -s "$token_file" ]] && \
+     "$curl_cmd" -fsS --max-time 2 http://127.0.0.1:9876/healthz 2>/dev/null | grep -q '"status":"ok"'; then
+    printf ORCA_CORE_READY
+    exit 0
+  fi
+  sleep 1
+done
+echo "Orca core services did not become ready within ${timeout_seconds}s." >&2
+exit 1

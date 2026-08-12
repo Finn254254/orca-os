@@ -14,6 +14,58 @@ else
   state_dir="/var/lib/orca"
 fi
 
+systemctl_cmd="${ORCA_SYSTEMCTL:-systemctl}"
+journalctl_cmd="${ORCA_JOURNALCTL:-journalctl}"
+ip_cmd="${ORCA_IP:-ip}"
+curl_cmd="${ORCA_CURL:-curl}"
+hostnamectl_cmd="${ORCA_HOSTNAMECTL:-hostnamectl}"
+hostname_cmd="${ORCA_HOSTNAME:-hostname}"
+if [[ -n "$ORCA_ROOT" ]]; then
+  token_init_cmd="${ORCA_TOKEN_INIT:-$ORCA_ROOT/usr/lib/orca/orca-token-init}"
+  support_bundle_cmd="${ORCA_SUPPORT_BUNDLE:-$ORCA_ROOT/usr/lib/orca/orca-support-bundle}"
+  resource_report_cmd="${ORCA_RESOURCE_REPORT:-$ORCA_ROOT/usr/lib/orca/resource-report}"
+else
+  token_init_cmd="${ORCA_TOKEN_INIT:-/usr/lib/orca/orca-token-init}"
+  support_bundle_cmd="${ORCA_SUPPORT_BUNDLE:-/usr/lib/orca/orca-support-bundle}"
+resource_report_cmd="${ORCA_RESOURCE_REPORT:-/usr/lib/orca/resource-report}"
+fi
+api_group="${ORCA_API_GROUP:-orca-api}"
+managed_services=(orca-agent orca-api ssh systemd-networkd)
+
+valid_hostname() {
+  local candidate="$1" label
+  (( ${#candidate} >= 1 && ${#candidate} <= 253 )) || return 1
+  [[ "$candidate" =~ ^[A-Za-z0-9.-]+$ ]] || return 1
+  IFS=. read -r -a labels <<<"$candidate"
+  for label in "${labels[@]}"; do
+    (( ${#label} >= 1 && ${#label} <= 63 )) || return 1
+    [[ "$label" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] || return 1
+  done
+}
+
+valid_peer_endpoint() {
+  local endpoint="$1" host port
+  (( ${#endpoint} >= 3 && ${#endpoint} <= 255 )) || return 1
+  host="${endpoint%:*}"
+  port="${endpoint##*:}"
+  [[ "$host" != "$endpoint" && "$host" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] || return 1
+  [[ "$port" =~ ^[0-9]+$ ]] && ((10#$port >= 1 && 10#$port <= 65535))
+}
+
+valid_service() {
+  local requested="$1" service
+  for service in "${managed_services[@]}"; do
+    [[ "$requested" == "$service" ]] && return 0
+  done
+  return 1
+}
+
+service_state() {
+  local state
+  state="$("$systemctl_cmd" is-active "$1.service" 2>/dev/null || true)"
+  printf '%s\n' "${state:-inactive}"
+}
+
 read_value() {
   local key="$1" file="$2"
   [[ -r "$file" ]] || return 0
@@ -113,8 +165,89 @@ command_status() {
   fi
 }
 
+command_record_view() {
+  local view="${1:?}" option="${2:-}"
+  case "$option" in
+    ""|--json) ;;
+    *) echo "Usage: orca $view [--json]" >&2; return 2 ;;
+  esac
+  [[ -r "$runtime_dir/node.json" ]] || {
+    echo "Node status is unavailable. Start orca-agent first." >&2
+    return 1
+  }
+  python3 - "$runtime_dir/node.json" "$view" "$option" <<'PY'
+import json
+import sys
+
+record = json.load(open(sys.argv[1], encoding="utf-8"))
+view, option = sys.argv[2], sys.argv[3]
+if view == "hardware":
+    payload = {
+        "schemaVersion": 1,
+        "architecture": record.get("architecture"),
+        "kernel": record.get("kernel"),
+        "resources": record.get("resources", {}),
+    }
+elif view == "platform":
+    payload = {"schemaVersion": 1, "platform": record.get("platform", {})}
+else:
+    health = record.get("health", {})
+    payload = {
+        "schemaVersion": 1,
+        "status": health.get("status", "healthy"),
+        "agent": record.get("agent", "inactive"),
+        "uptimeSeconds": health.get("uptimeSeconds"),
+        "load1m": health.get("load1m"),
+        "warnings": health.get("warnings", []),
+        "updated": record.get("updated"),
+    }
+if option == "--json":
+    print(json.dumps(payload, separators=(",", ":")))
+elif view == "hardware":
+    resources = payload["resources"]
+    cpu, memory, storage = resources.get("cpu", {}), resources.get("memory", {}), resources.get("storage", {})
+    print("Orca Hardware")
+    print(f"Architecture: {payload['architecture']}")
+    print(f"Kernel: {payload['kernel']}")
+    print(f"CPU: {cpu.get('model', 'unknown')}")
+    print(f"CPU Cores: {cpu.get('cores', 'unknown')}")
+    print(f"Memory: {memory.get('availableMiB', 'unknown')} MiB available / {memory.get('totalMiB', 'unknown')} MiB total")
+    print(f"Root Storage: {storage.get('rootAvailableMiB', 'unknown')} MiB available / {storage.get('rootTotalMiB', 'unknown')} MiB total")
+    print(f"Virtualization: {resources.get('virtualization', 'unknown')}")
+elif view == "platform":
+    platform = payload["platform"]
+    print("Orca Platform")
+    print(f"Board Model: {platform.get('boardModel', 'unknown')}")
+    print(f"Board Serial: {platform.get('boardSerial') or 'unavailable'}")
+    print(f"Firmware: {platform.get('firmware', 'unknown')}")
+    compatible = platform.get("compatible", [])
+    print(f"Compatible: {', '.join(compatible) if compatible else 'unavailable'}")
+    interfaces = platform.get("networkInterfaces", [])
+    print("Network Interfaces:")
+    if not interfaces:
+        print("  none detected")
+    for interface in interfaces:
+        carrier = "carrier" if interface.get("carrier") else "no-carrier"
+        print(f"  {interface.get('name', 'unknown')}  {interface.get('macAddress') or 'no-mac'}  {interface.get('state', 'unknown')}  {carrier}")
+    thermals = platform.get("thermalZones", [])
+    print("Thermal Zones:")
+    if not thermals:
+        print("  none detected")
+    for zone in thermals:
+        print(f"  {zone.get('type', zone.get('name', 'unknown'))}: {zone.get('celsius')} C")
+else:
+    print("Orca Health")
+    print(f"Status: {payload['status']}")
+    print(f"Agent: {payload['agent']}")
+    print(f"Uptime Seconds: {payload['uptimeSeconds']}")
+    print(f"Load 1m: {payload['load1m']}")
+    print(f"Warnings: {', '.join(payload['warnings']) if payload['warnings'] else 'none'}")
+    print(f"Updated: {payload['updated']}")
+PY
+}
+
 command_node() {
-  local node_id_file="$state_dir/node-id"
+  local node_id_file="$state_dir/node-id" new_hostname hostname_file hostname_temp
 
   case "${1:-}" in
     id)
@@ -129,15 +262,97 @@ command_node() {
         return 1
       }
       ;;
+    rename)
+      new_hostname="${2:-}"
+      [[ -z "${3:-}" ]] || { echo "Usage: orca node rename HOSTNAME" >&2; return 2; }
+      valid_hostname "$new_hostname" || { echo "Invalid hostname: $new_hostname" >&2; return 2; }
+      if ! "$hostnamectl_cmd" set-hostname "$new_hostname" 2>/dev/null; then
+        hostname_file="${ORCA_ROOT:-}/etc/hostname"
+        hostname_temp="$(mktemp "${hostname_file}.orca.XXXXXX")"
+        printf '%s\n' "$new_hostname" > "$hostname_temp"
+        chmod 0644 "$hostname_temp"
+        mv -f -- "$hostname_temp" "$hostname_file"
+        if [[ -z "$ORCA_ROOT" ]]; then
+          "$hostname_cmd" "$new_hostname"
+        fi
+      fi
+      "$systemctl_cmd" restart orca-agent.service
+      [[ "$(service_state orca-agent)" == active ]] || {
+        echo "Hostname changed, but orca-agent did not restart cleanly." >&2
+        return 1
+      }
+      echo "Node hostname changed to $new_hostname."
+      ;;
     *)
-      echo "Usage: orca node <id|show>" >&2
+      echo "Usage: orca node <id|show|rename HOSTNAME>" >&2
       return 2
       ;;
   esac
 }
 
+command_nodes() {
+  local option="${1:-}"
+  case "$option" in
+    ""|--json) ;;
+    *) echo "Usage: orca nodes [--json]" >&2; return 2 ;;
+  esac
+  python3 - "$runtime_dir/node.json" "$state_dir/peers" "$option" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+node_file, peers_dir, option = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+node_id_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+endpoint_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.:-]{0,255}$")
+nodes = []
+try:
+    local = json.loads(node_file.read_text())
+except (OSError, json.JSONDecodeError):
+    local = None
+if isinstance(local, dict):
+    nodes.append({
+        "nodeId": local.get("nodeId"),
+        "hostname": local.get("hostname"),
+        "architecture": local.get("architecture"),
+        "role": "local",
+        "status": "active",
+    })
+for peer_file in sorted(peers_dir.glob("*.json")):
+    try:
+        peer = json.loads(peer_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        continue
+    if (
+        isinstance(peer, dict)
+        and peer.get("schemaVersion") == 1
+        and isinstance(peer.get("nodeId"), str)
+        and isinstance(peer.get("endpoint"), str)
+        and node_id_pattern.fullmatch(peer["nodeId"])
+        and endpoint_pattern.fullmatch(peer["endpoint"])
+    ):
+        nodes.append({
+            "nodeId": peer["nodeId"],
+            "endpoint": peer["endpoint"],
+            "role": "peer",
+            "status": "enrolled",
+        })
+payload = {"schemaVersion": 1, "nodes": nodes}
+if option == "--json":
+    print(json.dumps(payload, separators=(",", ":")))
+else:
+    print("Orca Nodes")
+    if not nodes:
+        print("No local node or enrolled peers found.")
+    for node in nodes:
+        location = node.get("hostname") or node.get("endpoint") or "unknown"
+        print(f"{node.get('nodeId', 'unknown')}  {node['role']}  {node['status']}  {location}")
+PY
+}
+
 command_peer() {
-  local peers_dir="$state_dir/peers" node_id endpoint peer_file
+  local peers_dir="$state_dir/peers" peer_tokens_dir="$state_dir/peer-tokens"
+  local node_id endpoint peer_file token_file option peer_token temp_file payload
   case "${1:-}" in
     list)
       shopt -s nullglob
@@ -151,39 +366,252 @@ command_peer() {
     add)
       node_id="${2:-}"
       endpoint="${3:-}"
+      option="${4:-}"
+      [[ -z "${5:-}" ]] || { echo "Usage: orca peer add NODE_ID HOST:PORT [--token-stdin]" >&2; return 2; }
       [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
-      [[ "$endpoint" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,255}$ ]] || { echo "Invalid peer endpoint." >&2; return 2; }
+      valid_peer_endpoint "$endpoint" || { echo "Invalid peer endpoint; use HOST:PORT." >&2; return 2; }
+      [[ "$option" == --token-stdin ]] || { echo "Peer enrollment requires --token-stdin." >&2; return 2; }
       mkdir -p "$peers_dir"
+      chmod 750 "$peers_dir"
+      chgrp "$api_group" "$peers_dir"
+      if [[ "$option" == --token-stdin ]]; then
+        IFS= read -r peer_token || { echo "No peer API token was provided on standard input." >&2; return 2; }
+        [[ "$peer_token" =~ ^[A-Za-z0-9._~-]{32,256}$ ]] || { echo "Invalid peer API token." >&2; return 2; }
+        mkdir -p "$peer_tokens_dir"
+        chmod 750 "$peer_tokens_dir"
+        chgrp "$api_group" "$peer_tokens_dir"
+        token_file="$peer_tokens_dir/$node_id"
+        temp_file="$(mktemp "$peer_tokens_dir/.token.XXXXXX")"
+        printf '%s\n' "$peer_token" > "$temp_file"
+        chmod 640 "$temp_file"
+        chgrp "$api_group" "$temp_file"
+        mv -f "$temp_file" "$token_file"
+      fi
       peer_file="$peers_dir/$node_id.json"
-      printf '{"schemaVersion":1,"nodeId":"%s","endpoint":"%s"}\n' "$node_id" "$endpoint" > "$peer_file"
+      temp_file="$(mktemp "$peers_dir/.peer.XXXXXX")"
+      printf '{"schemaVersion":1,"nodeId":"%s","endpoint":"%s"}\n' "$node_id" "$endpoint" > "$temp_file"
+      chmod 640 "$temp_file"
+      chgrp "$api_group" "$temp_file"
+      mv -f "$temp_file" "$peer_file"
       echo "Enrolled peer: $node_id"
       ;;
     remove)
       node_id="${2:-}"
+      [[ -z "${3:-}" ]] || { echo "Usage: orca peer remove NODE_ID" >&2; return 2; }
       [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
       rm -f "$peers_dir/$node_id.json"
+      rm -f "$peer_tokens_dir/$node_id"
       echo "Removed peer: $node_id"
       ;;
-    *) echo "Usage: orca peer <list|add NODE_ID ENDPOINT|remove NODE_ID>" >&2; return 2 ;;
+    check)
+      node_id="${2:-}"
+      [[ -z "${3:-}" ]] || { echo "Usage: orca peer check NODE_ID" >&2; return 2; }
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      peer_file="$peers_dir/$node_id.json"
+      token_file="$peer_tokens_dir/$node_id"
+      [[ -r "$peer_file" ]] || { echo "Peer not found: $node_id" >&2; return 1; }
+      [[ -r "$token_file" ]] || { echo "Peer credential unavailable: re-enroll with --token-stdin." >&2; return 1; }
+      peer_token="$(tr -d '\r\n' < "$token_file")"
+      [[ "$peer_token" =~ ^[A-Za-z0-9._~-]{32,256}$ ]] || { echo "Stored peer credential is invalid." >&2; return 1; }
+      endpoint="$(python3 - "$peer_file" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+print(payload["endpoint"])
+PY
+)"
+      payload="$(printf 'header = "Authorization: Bearer %s"\nfail\nsilent\nshow-error\nmax-time = 5\n' "$peer_token" | "$curl_cmd" --config - --url "http://$endpoint/v1/node")"
+      python3 - "$node_id" "$payload" <<'PY'
+import json, sys
+payload = json.loads(sys.argv[2])
+if payload.get("nodeId") != sys.argv[1]:
+    raise SystemExit("peer identity did not match the enrolled node ID")
+PY
+      echo "Peer reachable: $node_id"
+      ;;
+    show)
+      node_id="${2:-}"
+      [[ -z "${3:-}" ]] || { echo "Usage: orca peer show NODE_ID" >&2; return 2; }
+      [[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Invalid peer node ID." >&2; return 2; }
+      peer_file="$peers_dir/$node_id.json"
+      [[ -r "$peer_file" ]] || { echo "Peer not found: $node_id" >&2; return 1; }
+      cat "$peer_file"
+      ;;
+    *) echo "Usage: orca peer <list|show NODE_ID|add NODE_ID HOST:PORT [--token-stdin]|check NODE_ID|remove NODE_ID>" >&2; return 2 ;;
+  esac
+}
+
+command_api() {
+  local token_file="$state_dir/api-token" token
+  case "${1:-}" in
+    token)
+      [[ -z "${2:-}" ]] || { echo "Usage: orca api token" >&2; return 2; }
+      [[ -r "$token_file" ]] || { echo "API token is unavailable." >&2; return 1; }
+      token="$(tr -d '\r\n' < "$token_file")"
+      [[ "$token" =~ ^[0-9a-f]{64}$ ]] || { echo "API token is invalid." >&2; return 1; }
+      printf '%s\n' "$token"
+      ;;
+    rotate-token)
+      [[ -z "${2:-}" ]] || { echo "Usage: orca api rotate-token" >&2; return 2; }
+      "$token_init_cmd" --rotate "$token_file"
+      echo "Rotated the Orca API token. Existing API and peer credentials must be updated."
+      ;;
+    *) echo "Usage: orca api <token|rotate-token>" >&2; return 2 ;;
+  esac
+}
+
+command_support() {
+  (( $# <= 1 )) || { echo "Usage: orca support [OUTPUT.tar.gz]" >&2; return 2; }
+  "$support_bundle_cmd" "$@"
+}
+
+command_resources() {
+  case "${1:-}" in
+    ""|--json) ;;
+    *) echo "Usage: orca resources [--json]" >&2; return 2 ;;
+  esac
+  [[ -z "${2:-}" ]] || { echo "Usage: orca resources [--json]" >&2; return 2; }
+  "$resource_report_cmd"
+}
+
+command_services() {
+  local option="${1:-}" service state
+  case "$option" in
+    ""|--json) ;;
+    *) echo "Usage: orca services [--json]" >&2; return 2 ;;
+  esac
+  if [[ "$option" == "--json" ]]; then
+    for service in "${managed_services[@]}"; do
+      printf '%s\t%s\n' "$service" "$(service_state "$service")"
+    done | python3 -c 'import json,sys; print(json.dumps({"schemaVersion":1,"services":[{"name":line.split("\t",1)[0],"state":line.rstrip().split("\t",1)[1]} for line in sys.stdin]},separators=(",",":")))'
+    return
+  fi
+  echo "Orca Services"
+  for service in "${managed_services[@]}"; do
+    state="$(service_state "$service")"
+    printf '%-20s %s\n' "$service" "$state"
+  done
+}
+
+command_service() {
+  local service="${1:-}" action="${2:-}"
+  valid_service "$service" || { echo "Unknown managed service: $service" >&2; return 2; }
+  case "$action" in
+    status)
+      "$systemctl_cmd" --no-pager --full status "$service.service"
+      ;;
+    restart)
+      [[ "$service" == orca-agent || "$service" == orca-api ]] || {
+        echo "Only Orca application services may be restarted with this command." >&2
+        return 2
+      }
+      "$systemctl_cmd" restart "$service.service"
+      [[ "$(service_state "$service")" == active ]] || {
+        echo "Service did not become active after restart: $service" >&2
+        return 1
+      }
+      echo "Restarted $service."
+      ;;
+    *) echo "Usage: orca service SERVICE <status|restart>" >&2; return 2 ;;
+  esac
+}
+
+command_logs() {
+  local service="${1:-}" lines="${2:-50}"
+  valid_service "$service" || { echo "Unknown managed service: $service" >&2; return 2; }
+  [[ "$lines" =~ ^[0-9]+$ ]] && (( lines >= 1 && lines <= 500 )) || {
+    echo "Log line count must be between 1 and 500." >&2
+    return 2
+  }
+  "$journalctl_cmd" -u "$service.service" -n "$lines" --no-pager
+}
+
+command_network() {
+  local option="${1:-}" output
+  case "$option" in
+    "")
+      echo "Orca Network"
+      "$ip_cmd" -4 -o address show scope global
+      ;;
+    --json)
+      output="$("$ip_cmd" -j -4 address show scope global)"
+      python3 - "$output" <<'PY'
+import json
+import sys
+
+interfaces = []
+for interface in json.loads(sys.argv[1]):
+    addresses = [item["local"] for item in interface.get("addr_info", []) if item.get("family") == "inet"]
+    interfaces.append({"name": interface.get("ifname"), "state": interface.get("operstate", "UNKNOWN").lower(), "ipv4": addresses})
+print(json.dumps({"schemaVersion": 1, "interfaces": interfaces}, separators=(",", ":")))
+PY
+      ;;
+    *) echo "Usage: orca network [--json]" >&2; return 2 ;;
   esac
 }
 
 command_doctor() {
-  local unit_file="$ORCA_ROOT/usr/lib/systemd/system/orca-agent.service"
-  local enabled_unit="$ORCA_ROOT/etc/systemd/system/multi-user.target.wants/orca-agent.service"
-  local cli_file="$ORCA_ROOT/usr/local/bin/orca"
+  local option="${1:-}" unit_file enabled_unit cli_file release_ok=0 cli_ok=0 unit_ok=0 enabled_ok=0
+  local node_ok=0 network_ok=0 api_ok=0 token_ok=0 stored_token agent_state api_state ssh_state networkd_state overall
+  case "$option" in
+    ""|--json) ;;
+    *) echo "Usage: orca doctor [--json]" >&2; return 2 ;;
+  esac
+  unit_file="$ORCA_ROOT/usr/lib/systemd/system/orca-agent.service"
+  enabled_unit="$ORCA_ROOT/etc/systemd/system/multi-user.target.wants/orca-agent.service"
+  cli_file="$ORCA_ROOT/usr/local/bin/orca"
   [[ -n "$ORCA_ROOT" ]] || {
     unit_file="/usr/lib/systemd/system/orca-agent.service"
     enabled_unit="/etc/systemd/system/multi-user.target.wants/orca-agent.service"
     cli_file="/usr/local/bin/orca"
   }
 
-  echo "Orca OS Diagnostics"
-  [[ -r "$release_file" ]] && echo "Release: ok" || { echo "Release: missing"; return 1; }
-  [[ -x "$cli_file" ]] && echo "CLI: ok" || { echo "CLI: missing"; return 1; }
-  [[ -f "$unit_file" ]] && echo "Agent unit: ok" || { echo "Agent unit: missing"; return 1; }
-  [[ -L "$enabled_unit" ]] && echo "Agent enabled: ok" || { echo "Agent enabled: missing"; return 1; }
-  [[ -r "$runtime_dir/node.json" ]] && echo "Node record: available" || echo "Node record: unavailable"
+  [[ -r "$release_file" ]] && release_ok=1
+  [[ -x "$cli_file" ]] && cli_ok=1
+  [[ -f "$unit_file" ]] && unit_ok=1
+  [[ -L "$enabled_unit" ]] && enabled_ok=1
+  [[ -r "$runtime_dir/node.json" ]] && node_ok=1
+  if [[ -r "$state_dir/api-token" ]]; then
+    stored_token="$(tr -d '\r\n' < "$state_dir/api-token")"
+    [[ "$stored_token" =~ ^[0-9a-f]{64}$ ]] && token_ok=1 || true
+  fi
+  agent_state="$(service_state orca-agent)"
+  api_state="$(service_state orca-api)"
+  ssh_state="$(service_state ssh)"
+  networkd_state="$(service_state systemd-networkd)"
+  "$ip_cmd" -4 -o address show scope global 2>/dev/null | grep -q ' inet ' && network_ok=1 || true
+  if [[ -z "$ORCA_ROOT" ]]; then
+    "$curl_cmd" -fsS --max-time 2 http://127.0.0.1:9876/healthz 2>/dev/null | grep -q '"status":"ok"' && api_ok=1 || true
+  else
+    [[ "$api_state" == active ]] && api_ok=1
+  fi
+  overall=ok
+  (( release_ok && cli_ok && unit_ok && enabled_ok && node_ok && network_ok && api_ok && token_ok )) || overall=failed
+  [[ "$agent_state" == active && "$api_state" == active && "$ssh_state" == active && "$networkd_state" == active ]] || overall=failed
+
+  if [[ "$option" == "--json" ]]; then
+    ORCA_DOCTOR_OVERALL="$overall" ORCA_DOCTOR_RELEASE="$release_ok" ORCA_DOCTOR_CLI="$cli_ok" \
+    ORCA_DOCTOR_UNIT="$unit_ok" ORCA_DOCTOR_ENABLED="$enabled_ok" ORCA_DOCTOR_NODE="$node_ok" \
+    ORCA_DOCTOR_NETWORK="$network_ok" ORCA_DOCTOR_API="$api_ok" ORCA_DOCTOR_TOKEN="$token_ok" ORCA_DOCTOR_AGENT_STATE="$agent_state" \
+    ORCA_DOCTOR_API_STATE="$api_state" ORCA_DOCTOR_SSH_STATE="$ssh_state" ORCA_DOCTOR_NETWORKD_STATE="$networkd_state" \
+      python3 - <<'PY'
+import json, os
+ok = lambda name: os.environ[name] == "1"
+print(json.dumps({"schemaVersion":1,"status":os.environ["ORCA_DOCTOR_OVERALL"],"checks":{"release":ok("ORCA_DOCTOR_RELEASE"),"cli":ok("ORCA_DOCTOR_CLI"),"agentUnit":ok("ORCA_DOCTOR_UNIT"),"agentEnabled":ok("ORCA_DOCTOR_ENABLED"),"nodeRecord":ok("ORCA_DOCTOR_NODE"),"network":ok("ORCA_DOCTOR_NETWORK"),"api":ok("ORCA_DOCTOR_API"),"apiToken":ok("ORCA_DOCTOR_TOKEN")},"services":{"orca-agent":os.environ["ORCA_DOCTOR_AGENT_STATE"],"orca-api":os.environ["ORCA_DOCTOR_API_STATE"],"ssh":os.environ["ORCA_DOCTOR_SSH_STATE"],"systemd-networkd":os.environ["ORCA_DOCTOR_NETWORKD_STATE"]}},separators=(",",":")))
+PY
+  else
+    echo "Orca OS Diagnostics"
+    echo "Overall: $overall"
+    echo "Release: $([[ $release_ok == 1 ]] && echo ok || echo missing)"
+    echo "CLI: $([[ $cli_ok == 1 ]] && echo ok || echo missing)"
+    echo "Agent unit: $([[ $unit_ok == 1 ]] && echo ok || echo missing)"
+    echo "Agent enabled: $([[ $enabled_ok == 1 ]] && echo ok || echo missing)"
+    echo "Node record: $([[ $node_ok == 1 ]] && echo available || echo unavailable)"
+    echo "Network IPv4: $([[ $network_ok == 1 ]] && echo ok || echo missing)"
+    echo "API health: $([[ $api_ok == 1 ]] && echo ok || echo failed)"
+    echo "API token: $([[ $token_ok == 1 ]] && echo ok || echo missing-or-invalid)"
+    echo "Services: agent=$agent_state api=$api_state ssh=$ssh_state networkd=$networkd_state"
+  fi
+  [[ "$overall" == ok ]]
 }
 
 usage() {
@@ -193,12 +621,27 @@ Usage: orca <command>
 Commands:
   info       Print Orca and operating-system information; add --json for structured output
   status     Print local Orca node status; add --json for structured output
+  hardware   Print CPU, memory, storage, and platform inventory; add --json
+  platform   Print board, firmware, network-device, and thermal details; add --json
+  health     Print live node health metrics; add --json
   node id    Print the persistent local node identity
   node show  Print the structured local node record
+  node rename Change the node hostname and refresh its local record
+  nodes      List the local node and enrolled peers; add --json
+  services   List managed system services; add --json
+  service    Show or restart a managed service
+  logs       Show recent logs: orca logs SERVICE [LINES]
+  network    Show global IPv4 interfaces; add --json
   peer list  List enrolled peer nodes
-  peer add   Enroll a peer node by ID and endpoint
+  peer show  Show one enrolled peer record
+  peer add   Enroll a peer; read its API token from stdin with --token-stdin
+  peer check Verify an enrolled peer's authenticated identity and reachability
   peer remove Remove an enrolled peer node
-  doctor     Check the local Orca OS installation
+  api token  Explicitly print the local API bearer token
+  api rotate-token Atomically replace the local API bearer token
+  resources  Print a compact process, memory, and service resource report
+  support    Create a bounded, secret-redacted diagnostic archive
+  doctor     Check installation, services, network, and API; add --json
   version    Print the Orca OS version
 EOF
 }
@@ -206,9 +649,20 @@ EOF
 case "${1:-}" in
   info) shift; command_info "$@" ;;
   status) shift; command_status "$@" ;;
+  hardware) shift; command_record_view hardware "$@" ;;
+  platform) shift; command_record_view platform "$@" ;;
+  health) shift; command_record_view health "$@" ;;
   node) shift; command_node "$@" ;;
+  nodes) shift; command_nodes "$@" ;;
   peer) shift; command_peer "$@" ;;
-  doctor) command_doctor ;;
+  api) shift; command_api "$@" ;;
+  services) shift; command_services "$@" ;;
+  service) shift; command_service "$@" ;;
+  logs) shift; command_logs "$@" ;;
+  network) shift; command_network "$@" ;;
+  resources) shift; command_resources "$@" ;;
+  support) shift; command_support "$@" ;;
+  doctor) shift; command_doctor "$@" ;;
   version) orca_version ;;
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;

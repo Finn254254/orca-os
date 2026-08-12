@@ -1,13 +1,13 @@
 [Unit]
 Description=Orca OS boot readiness marker
-After=orca-agent.service orca-api.service
-Wants=orca-agent.service orca-api.service
+After=orca-core-ready.service network-online.target
+Wants=network-online.target
+Requires=orca-core-ready.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/printf ORCA_OS_READY
-StandardOutput=tty
-TTYPath=/dev/ttyS0
+StandardOutput=journal+console
 RemainAfterExit=yes
 
 [Install]

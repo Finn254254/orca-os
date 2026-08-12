@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+umask 077
+
+fail() {
+  echo "orca-support-bundle: $*" >&2
+  exit 1
+}
+
+if (( $# > 1 )); then
+  fail "usage: orca-support-bundle [OUTPUT.tar.gz]"
+fi
+
+orca_root="${ORCA_ROOT:-}"
+if [[ -n "$orca_root" ]]; then
+  [[ "$orca_root" == /* ]] || fail "ORCA_ROOT must be an absolute path."
+  orca_root="${orca_root%/}"
+fi
+
+max_bytes="${ORCA_SUPPORT_MAX_BYTES:-65536}"
+log_lines="${ORCA_SUPPORT_LOG_LINES:-100}"
+command_timeout="${ORCA_SUPPORT_TIMEOUT_SECONDS:-10}"
+[[ "$max_bytes" =~ ^[0-9]+$ ]] && (( max_bytes >= 1024 && max_bytes <= 1048576 )) ||
+  fail "ORCA_SUPPORT_MAX_BYTES must be between 1024 and 1048576."
+[[ "$log_lines" =~ ^[0-9]+$ ]] && (( log_lines >= 1 && log_lines <= 1000 )) ||
+  fail "ORCA_SUPPORT_LOG_LINES must be between 1 and 1000."
+[[ "$command_timeout" =~ ^[0-9]+$ ]] && (( command_timeout >= 1 && command_timeout <= 60 )) ||
+  fail "ORCA_SUPPORT_TIMEOUT_SECONDS must be between 1 and 60."
+
+if [[ -n "${ORCA_CLI_CMD:-}" ]]; then
+  orca_cmd="$ORCA_CLI_CMD"
+elif [[ -n "$orca_root" && -x "$orca_root/usr/local/bin/orca" ]]; then
+  orca_cmd="$orca_root/usr/local/bin/orca"
+else
+  orca_cmd="/usr/local/bin/orca"
+fi
+journalctl_cmd="${ORCA_JOURNALCTL_CMD:-journalctl}"
+timeout_cmd="${ORCA_TIMEOUT_CMD:-timeout}"
+date_cmd="${ORCA_DATE_CMD:-date}"
+hostname_cmd="${ORCA_HOSTNAME_CMD:-hostname}"
+if [[ -n "${ORCA_RESOURCE_REPORT_CMD:-}" ]]; then
+  resource_cmd="$ORCA_RESOURCE_REPORT_CMD"
+elif [[ -n "$orca_root" && -x "$orca_root/usr/lib/orca/resource-report" ]]; then
+  resource_cmd="$orca_root/usr/lib/orca/resource-report"
+else
+  resource_cmd="/usr/lib/orca/resource-report"
+fi
+tar_cmd="${ORCA_TAR_CMD:-tar}"
+head_cmd="${ORCA_HEAD_CMD:-head}"
+
+command_available() {
+  if [[ "$1" == */* ]]; then
+    [[ -x "$1" ]]
+  else
+    command -v "$1" >/dev/null 2>&1
+  fi
+}
+
+for required_cmd in "$timeout_cmd" "$date_cmd" "$tar_cmd" "$head_cmd"; do
+  command_available "$required_cmd" || fail "required command is unavailable: $required_cmd"
+done
+
+timestamp="$($date_cmd -u +%Y%m%dT%H%M%SZ)" || fail "could not determine the current UTC time."
+[[ "$timestamp" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || fail "date command returned an invalid timestamp."
+bundle_name="orca-support-$timestamp"
+output="${1:-$PWD/$bundle_name.tar.gz}"
+[[ "$output" == *.tar.gz ]] || fail "output must end in .tar.gz."
+output_dir="$(dirname -- "$output")"
+[[ -d "$output_dir" ]] || fail "output directory does not exist: $output_dir"
+[[ ! -e "$output" && ! -L "$output" ]] || fail "refusing to overwrite existing output: $output"
+
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/orca-support.XXXXXX")"
+staged_output=""
+cleanup() {
+  rm -rf -- "$work_dir"
+  if [[ -n "$staged_output" && -e "$staged_output" ]]; then
+    rm -f -- "$staged_output"
+  fi
+}
+trap cleanup EXIT INT TERM
+
+bundle_dir="$work_dir/$bundle_name"
+mkdir -p "$bundle_dir/logs"
+
+# Support data is collected from a fixed allowlist. This script intentionally never
+# walks /var/lib, /root, /home, or /etc/ssh and never captures process environments.
+sanitize() {
+  awk '
+    BEGIN { in_private_key = 0 }
+    /-----BEGIN ([A-Z0-9][A-Z0-9 ]* )?PRIVATE KEY-----/ {
+      print "[REDACTED PRIVATE KEY BLOCK]"
+      in_private_key = 1
+      next
+    }
+    in_private_key {
+      if ($0 ~ /-----END ([A-Z0-9][A-Z0-9 ]* )?PRIVATE KEY-----/) {
+        in_private_key = 0
+      }
+      next
+    }
+    {
+      line = $0
+      lower = tolower(line)
+      if (lower ~ /authorization[[:space:]]*:[[:space:]]*bearer/ ||
+          lower ~ /(api[-_]?token|access[-_]?token|password|secret|private[-_]?key)[[:space:]]*[:=]/) {
+        print "[REDACTED SENSITIVE LINE]"
+      } else {
+        print line
+      }
+    }
+  '
+}
+
+capture_command() {
+  local destination="$1"
+  shift
+  local raw_file="$work_dir/capture.raw"
+  local statuses=() command_status=0 size=0
+
+  if ! command_available "$1"; then
+    printf '[unavailable: command not installed]\n' > "$destination"
+    return 0
+  fi
+
+  : > "$raw_file"
+  set +e
+  "$timeout_cmd" "$command_timeout" "$@" 2>&1 | "$head_cmd" -c "$max_bytes" > "$raw_file"
+  statuses=("${PIPESTATUS[@]}")
+  set -e
+  command_status="${statuses[0]:-1}"
+  size="$(wc -c < "$raw_file")"
+  sanitize < "$raw_file" > "$destination"
+  if (( size >= max_bytes )); then
+    printf '\n[output truncated at %s bytes]\n' "$max_bytes" >> "$destination"
+  elif (( command_status != 0 )); then
+    printf '\n[command unavailable or exited with status %s]\n' "$command_status" >> "$destination"
+  fi
+  rm -f -- "$raw_file"
+}
+
+capture_orca() {
+  local destination="$1"
+  shift
+  ORCA_ROOT="$orca_root" capture_command "$destination" "$orca_cmd" "$@"
+}
+
+capture_file() {
+  local source="$1" destination="$2" raw_file="$work_dir/capture.raw" size
+  if [[ ! -f "$source" || -L "$source" || ! -r "$source" ]]; then
+    printf '[unavailable]\n' > "$destination"
+    return 0
+  fi
+  "$head_cmd" -c "$max_bytes" -- "$source" > "$raw_file"
+  size="$(wc -c < "$raw_file")"
+  sanitize < "$raw_file" > "$destination"
+  if (( size >= max_bytes )); then
+    printf '\n[output truncated at %s bytes]\n' "$max_bytes" >> "$destination"
+  fi
+  rm -f -- "$raw_file"
+}
+
+hostname_value="unknown"
+if command_available "$hostname_cmd"; then
+  hostname_value="$($timeout_cmd "$command_timeout" "$hostname_cmd" 2>/dev/null | "$head_cmd" -c 255 || true)"
+  [[ -n "$hostname_value" ]] || hostname_value="unknown"
+fi
+{
+  printf 'Bundle: %s\n' "$bundle_name"
+  printf 'Created UTC: %s\n' "$timestamp"
+  printf 'Hostname: %s\n' "$hostname_value"
+  printf 'Maximum bytes per section: %s\n' "$max_bytes"
+  printf 'Recent log lines requested: %s\n' "$log_lines"
+} | sanitize > "$bundle_dir/metadata.txt"
+
+release_file="${orca_root}/etc/orca-release"
+capture_file "$release_file" "$bundle_dir/release.txt"
+capture_orca "$bundle_dir/node.txt" node show
+capture_orca "$bundle_dir/info.txt" info --json
+capture_orca "$bundle_dir/doctor.txt" doctor --json
+capture_orca "$bundle_dir/services.txt" services --json
+capture_orca "$bundle_dir/network.txt" network --json
+capture_orca "$bundle_dir/platform.txt" platform --json
+capture_orca "$bundle_dir/health.txt" health --json
+capture_command "$bundle_dir/resources.txt" "$resource_cmd"
+
+journal_root_args=()
+if [[ -n "$orca_root" ]]; then
+  journal_root_args+=("--root=$orca_root")
+fi
+for service in orca-agent orca-api; do
+  capture_command "$bundle_dir/logs/$service.txt" "$journalctl_cmd" \
+    "${journal_root_args[@]}" -u "$service.service" -n "$log_lines" --no-pager --output=short-iso
+done
+
+archive_file="$work_dir/$bundle_name.tar.gz"
+"$tar_cmd" -C "$work_dir" -czf "$archive_file" "$bundle_name"
+chmod 600 "$archive_file"
+
+# Stage beside the destination and use a rename so a successful result is never
+# observed as a partial archive. Existing paths and symlinks are refused above.
+staged_output="$(mktemp "$output_dir/.orca-support.XXXXXX")"
+chmod 600 "$staged_output"
+cp -- "$archive_file" "$staged_output"
+chmod 600 "$staged_output"
+[[ ! -e "$output" && ! -L "$output" ]] || fail "output appeared while the bundle was being created: $output"
+mv -- "$staged_output" "$output"
+staged_output=""
+chmod 600 "$output"
+printf '%s\n' "$output"
