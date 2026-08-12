@@ -16,7 +16,7 @@ jobs:
           sudo apt-get update
           mkosi -C build dependencies | xargs -r sudo apt-get install -y
       - name: Build verified x86-64 image
-        run: make image
+        run: sudo env "PATH=$PATH" "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}" make image
       - name: Upload VM image
         uses: actions/upload-artifact@v4
         with:
