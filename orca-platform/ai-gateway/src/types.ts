@@ -1,10 +1,7 @@
 import { z } from "zod";
+import { ChatMessageSchema, type ChatMessage } from "@orca/shared";
 
-export const ChatMessageSchema = z.object({
-  role: z.enum(["system", "user", "assistant", "tool"]),
-  content: z.string(),
-});
-export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+export { ChatMessageSchema, type ChatMessage };
 
 export const ChatCompletionRequestSchema = z.object({
   model: z.string(),

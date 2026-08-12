@@ -1,10 +1,10 @@
 # Orca Platform — Progress
 
-Last updated: 2026-08-11 (autonomous build session).
+Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-18 complete.** Moving into Phase 19 (Orca AI).
+**Phases 1-18 complete. Phase 19 (Orca AI) backend complete, frontend in progress.**
 
 ## Completed
 
@@ -379,15 +379,44 @@ Last updated: 2026-08-11 (autonomous build session).
     (full server with a configured token, `/health` still open), 1 in
     `api` (audit event recorded + admin-only access enforced).
 
+- **Phase 19 — Orca AI (backend)**
+  - `@orca/shared`: `ChatMessageSchema` (`role`/`content`) and
+    `ConversationSchema` (`id`/`userId`/`title`/`model`/`messages`/
+    `createdAt`/`updatedAt`) — the single source of truth for chat wire
+    format, now shared by `@orca/ai-gateway` (which re-exports
+    `ChatMessage` instead of redefining it) and the new conversation store.
+  - `@orca/ai-gateway`: added `parseSseChunk`, a pure function that extracts
+    OpenAI-style SSE `delta.content`/`message.content` text from a raw SSE
+    byte chunk, tolerant of partial lines split across chunk boundaries
+    (caller holds the `remainder` buffer across calls) and of `[DONE]`/
+    malformed lines. Used to accumulate the full assistant reply for
+    persistence while the raw bytes are still passed through to the client
+    unmodified. Tests: 7.
+  - `api/src/conversationStore.ts`: `ConversationStore`, a per-user
+    `JsonStore`-backed CRUD store (`create`/`listForUser`/`get`/
+    `appendMessage`/`rename`/`delete`), persisted under
+    `<dataDir>/ai/conversations.json`.
+  - `api/src/routes/conversations.ts`: `createConversationsRouter`, mounted
+    at `/api/v1/ai/conversations` (auth required). List/create/get/rename/
+    delete are ownership-checked against `req.user.userId` (404, not 403,
+    for another user's conversation — doesn't leak existence).
+    `POST /:id/messages` appends the user's message, then streams the
+    assistant's reply as SSE straight from `AiGatewayService.streamChatCompletion`
+    (byte-for-byte passthrough to the HTTP response) while using
+    `parseSseChunk` to accumulate the full text server-side, and persists
+    the completed assistant message once the stream ends.
+  - Wired into `api/src/server.ts` and `api/src/openapi.ts`.
+  - Tests: 4 in `api/src/conversations.test.ts` — full create→send→persist
+    round trip against a fake OpenAI-SSE-shaped upstream server (same
+    pattern as `aiGateway.test.ts`), list-scoped-to-user, 404 for another
+    user's conversation, rename+delete.
+  - Frontend (`orca-platform/ai/`) not yet started — see Next work.
+
 ## Partially completed / next up
 
-- Phases 19-24: not started (see `orca-platform/README.md` for the full
-  component list and the top-level build instructions for phase ordering).
-  Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
-  intentionally *not* in the API yet — they'll be added alongside the
-  Compute/Scheduler/Model Manager/Deploy/Storage subsystems that back them
-  (Phases 9-14), rather than stubbed out now with no real implementation
-  behind them.
+- Phase 19 frontend, Phases 20-24: not started (see `orca-platform/README.md`
+  for the full component list and the top-level build instructions for
+  phase ordering).
 
 ## Tests
 
@@ -400,9 +429,9 @@ whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (10),
 `control` (12), `agent` (12), `compute` (11), `scheduler` (10), `models`
-(21), `ai-gateway` (9), `deploy` (11), `storage` (11),
-`hardware-daemon` (16), `update` (18), `backup` (13), `api` (16),
-`cli` (7), `dashboard` (9), `tests` e2e (7) = 204/204.
+(21), `ai-gateway` (16), `deploy` (11), `storage` (11),
+`hardware-daemon` (16), `update` (18), `backup` (13), `api` (20),
+`cli` (7), `dashboard` (9), `tests` e2e (7) = 215/215.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -448,8 +477,9 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca AI (Phase 19): user-facing chat app (React) via AI Gateway —
-   conversation history, model selection, streaming, markdown/code
-   rendering, server-side conversation storage.
+1. Orca AI (Phase 19) frontend: `orca-platform/ai/` React app — chat UI,
+   conversation history sidebar, model selection, streaming display,
+   markdown/code rendering. Backend (schema, conversation storage, SSE
+   passthrough route) is done — see Phase 19 above.
 2. Orca Studio (Phase 20): agent/workflow builder.
 3. App backend (Phase 21): endpoints for future mobile/desktop apps.

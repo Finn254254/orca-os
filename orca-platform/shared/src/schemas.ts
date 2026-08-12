@@ -326,6 +326,25 @@ export const RolloutSchema = z.object({
 });
 export type Rollout = z.infer<typeof RolloutSchema>;
 
+// ---- Orca AI conversations ----
+
+export const ChatMessageSchema = z.object({
+  role: z.enum(["system", "user", "assistant", "tool"]),
+  content: z.string(),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+export const ConversationSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  title: z.string(),
+  model: z.string(),
+  messages: z.array(ChatMessageSchema).default([]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Conversation = z.infer<typeof ConversationSchema>;
+
 // ---- Models ----
 
 export const ModelRuntimeSchema = z.enum(["ollama", "llamacpp", "mock"]);

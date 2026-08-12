@@ -57,6 +57,22 @@ export function buildOpenApiSpec(): Record<string, unknown> {
         get: { summary: "Get cluster config", security: [bearerAuth], responses: { "200": { description: "Config" } } },
         put: { summary: "Update cluster config (admin)", security: [bearerAuth], responses: { "200": { description: "Config" } } },
       },
+      "/ai/conversations": {
+        get: { summary: "List the current user's conversations", security: [bearerAuth], responses: { "200": { description: "Conversations" } } },
+        post: { summary: "Create a conversation", security: [bearerAuth], responses: { "201": { description: "Conversation" } } },
+      },
+      "/ai/conversations/{id}": {
+        get: { summary: "Get a conversation (owner only)", security: [bearerAuth], responses: { "200": { description: "Conversation" }, "404": { description: "Not found" } } },
+        put: { summary: "Rename a conversation", security: [bearerAuth], responses: { "200": { description: "Conversation" } } },
+        delete: { summary: "Delete a conversation", security: [bearerAuth], responses: { "204": { description: "Deleted" } } },
+      },
+      "/ai/conversations/{id}/messages": {
+        post: {
+          summary: "Send a message; streams the assistant's reply as SSE and persists both messages",
+          security: [bearerAuth],
+          responses: { "200": { description: "SSE stream (OpenAI-compatible chunks)" } },
+        },
+      },
       "/ai/models": {
         get: { summary: "List available models (OpenAI-compatible)", security: [bearerAuth], responses: { "200": { description: "Model list" } } },
       },

@@ -13,8 +13,10 @@ import { UpdateService, UpdateStore, createUpdateRouter, startUpdatePoller } fro
 import { createLogger, type Logger } from "@orca/shared";
 import type { ApiConfig } from "./config.js";
 import { ControlClient, ControlClientError } from "./controlClient.js";
+import { ConversationStore } from "./conversationStore.js";
 import { auditMiddleware } from "./middleware/audit.js";
 import { requireAuth, requireRole } from "./middleware/auth.js";
+import { createConversationsRouter } from "./routes/conversations.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { createRealtimeHub, type RealtimeHub } from "./realtime.js";
 import { createAuthRouter } from "./routes/auth.js";
@@ -35,6 +37,7 @@ export interface ApiServerHandle {
   storage: StorageService;
   update: UpdateService;
   aiGateway: AiGatewayService;
+  conversations: ConversationStore;
   realtime: RealtimeHub;
   logger: Logger;
   close: () => Promise<void>;
@@ -96,6 +99,9 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   const update = new UpdateService({ store: updateStore, control, signingKey: process.env.ORCA_UPDATE_SIGNING_KEY, logger });
   const stopUpdatePoller = startUpdatePoller(update);
 
+  const conversations = new ConversationStore(join(config.dataDir, "ai"));
+  await conversations.init();
+
   const aiGateway = new AiGatewayService({
     models: modelStore,
     runtimeUrls: {
@@ -131,6 +137,11 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     createModelsRouter(models, requireRole("admin", "operator")),
   );
   app.use("/api/v1/ai", requireAuth(config.sessionSecret), createAiGatewayRouter(aiGateway));
+  app.use(
+    "/api/v1/ai/conversations",
+    requireAuth(config.sessionSecret),
+    createConversationsRouter(conversations, aiGateway),
+  );
   app.use(
     "/api/v1/apps",
     requireAuth(config.sessionSecret),
@@ -179,6 +190,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     storage,
     update,
     aiGateway,
+    conversations,
     realtime,
     logger,
     close: async () => {
