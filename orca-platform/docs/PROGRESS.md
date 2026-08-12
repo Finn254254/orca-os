@@ -4,7 +4,7 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-19 complete.** Moving into Phase 20 (Orca Studio).
+**Phases 1-20 complete.** Moving into Phase 21 (App Backend).
 
 ## Completed
 
@@ -451,9 +451,76 @@ Last updated: 2026-08-12 (autonomous build session).
       simulated nodes/Dashboard on `:5174`) and documented in the root
       `README.md`'s getting-started instructions.
 
+- **Phase 20 — Orca Studio**
+  - Backend lives directly in `@orca/api` (not a separate `@orca/*`
+    package) — same reasoning as Orca AI's conversations: every resource
+    is per-user application state, not cluster-wide state a CLI/Control
+    consumer would need. `api/src/studioAgentConfigStore.ts`,
+    `studioWorkflowStore.ts`, `studioRunStore.ts` (three `JsonStore`-backed
+    per-user CRUD stores), `studioService.ts` (`StudioService`,
+    orchestrates them + a narrow `StudioChatRuntime` port — `{complete(model,
+    messages): Promise<string>}` — so this code never depends on
+    `@orca/ai-gateway`'s full surface, same `ControlPort`-style structural
+    interface pattern used by Compute/Deploy/Update), `routes/studio.ts`
+    (`createStudioRouter`, mounted at `/api/v1/studio` behind auth only).
+  - **Agent configs** (`StudioAgentConfig`): `name` + `systemPrompt` +
+    `model` + `tools` (a declarative list of tool names — see Scope
+    below). Full CRUD, ownership-checked per user (404 for another user's
+    config, matching conversations' behavior).
+  - **Workflows** (`StudioWorkflow`): `name` + an ordered, non-empty list
+    of steps, each referencing an agent config by id. `runWorkflow` runs
+    steps in order as a **linear pipeline** (explicit MVP scope, not a
+    general DAG), chaining each step's output into the next step's input,
+    and stops at the first failing step.
+  - **Runs** (`StudioRun`): a durable history of every testing-console
+    execution — `kind` (`agent`/`workflow`), `status`
+    (`running`→`succeeded`/`failed`), per-step `StudioRunStepResult`
+    (input/output/error/latency), and the final output.
+  - **Scope**: `tools` on an agent config is metadata only — saved and
+    displayed, never invoked. Real tool execution needs a function-calling
+    -capable runtime integration (tool-call parsing, a tool registry, a
+    sandboxed execution path) not built yet; tracked under Known
+    limitations below rather than half-built.
+  - `@orca/studio` (`orca-platform/studio/`): the frontend, React + Vite +
+    TypeScript, same conventions as `@orca/dashboard`/`@orca/ai`. Sidebar
+    with three tabs (Agents/Workflows/Runs); an agent config editor
+    (name/system-prompt/model/tools) and a workflow editor (ordered,
+    reorderable step list referencing saved agent configs); a shared
+    testing-console component that runs the selected agent/workflow and
+    renders the result (status, per-step results, output/error); a Runs
+    tab that reuses the same result view for history.
+  - Wired into `scripts/dev-cluster.mjs` (starts on `:5175`) and the root
+    `README.md`.
+  - Tests: 6 in `api/src/studioService.test.ts` (agent config CRUD +
+    cross-user ownership isolation, single-agent run success/failure,
+    workflow chaining, stop-on-first-failure — against a fake
+    `StudioChatRuntime`) + 4 in `api/src/studio.test.ts` (full HTTP-level
+    coverage: create+run through a real `AiGatewayService` and a fake
+    Ollama/OpenAI-shaped upstream, cross-user 404s, two-step workflow run,
+    400 on malformed input) + 9 frontend unit/component tests
+    (`studio/src/api.test.ts` 5, `AgentConfigEditor.test.tsx` 2,
+    `WorkflowEditor.test.tsx` 2) + 1 real headless-browser end-to-end test
+    (`tests/e2e/studio.test.ts`): logs in, creates an agent config against
+    a real registered model, runs it through the testing console against
+    a fake upstream (real Control + API underneath), and confirms the run
+    appears under the Runs tab.
+  - Bug caught by the e2e test during development: `AgentConfigEditor`'s
+    `model` field initialized from the `models` prop *once* at mount
+    (`useState(config?.model ?? models[0]?.id ?? "")`), but `models` loads
+    asynchronously — mounting "+ New agent" before the fetch resolved left
+    `model` permanently `""` and Save permanently disabled, since a
+    `useState` initializer only runs on first render. Fixed with a
+    `useEffect` that defaults to the first available model once `models`
+    arrives, but only for a new/unsaved config with no selection yet
+    (never overrides a saved config's model or a choice the user already
+    made) — same class of "prop arrives after mount, stale initial state"
+    bug as the `SimulatedMetricsProvider` bug from Phase 3/4, caught the
+    same way: a real end-to-end test driving the actual UI, not a unit
+    test with synchronous fixture data.
+
 ## Partially completed / next up
 
-- Phases 20-24: not started (see `orca-platform/README.md` for the full
+- Phases 21-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
 
 ## Tests
@@ -468,16 +535,18 @@ whole-platform build.
 All tests currently green: `shared` (7), `mesh` (4), `security` (10),
 `control` (12), `agent` (12), `compute` (11), `scheduler` (10), `models`
 (21), `ai-gateway` (16), `deploy` (11), `storage` (11),
-`hardware-daemon` (16), `update` (18), `backup` (13), `api` (20),
-`cli` (7), `dashboard` (9), `ai` (17), `tests` e2e (8) = 233/233.
+`hardware-daemon` (16), `update` (18), `backup` (13), `api` (30),
+`cli` (7), `dashboard` (9), `ai` (17), `studio` (9), `tests` e2e (9) =
+253/253.
 
-Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
-`tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
-and its own `tsc --noEmit` typecheck (`npm run typecheck` in
-`dashboard/`), separate from the NodeNext backend project references.
+Note: `dashboard/`, `ai/`, and `studio/` are intentionally **not** in the
+root `tsconfig.json` `tsc -b` graph — they're Vite/browser apps with
+`moduleResolution: "Bundler"` and their own `tsc --noEmit` typecheck
+(`npm run typecheck` in each), separate from the NodeNext backend project
+references.
 `tests/` pulls in `playwright-core` (driving the pre-installed Chromium at
-`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) for the dashboard
-browser test only — not used elsewhere.
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) for the Dashboard,
+Orca AI, and Orca Studio browser tests — not used elsewhere.
 
 ## Known limitations
 
@@ -497,6 +566,14 @@ browser test only — not used elsewhere.
 - Orca API's realtime channel is poll-and-diff against Control (not a
   push-based event bus across process boundaries) — simple and reliable for
   MVP scale; would need revisiting for a large cluster.
+- Orca Studio's `tools` field on an agent config is declarative metadata
+  only — saved and shown, never invoked. Real tool execution needs a
+  function-calling-capable runtime integration (tool-call parsing from a
+  model's response, a tool registry, a sandboxed execution path) that
+  isn't built yet.
+- Orca Studio's workflow engine is a linear pipeline (each step's output
+  feeds the next step's input) — not a general DAG with branching/fan-out.
+  A real workflow-graph engine is future scope if a use case needs it.
 
 ## Architecture decisions
 
@@ -523,9 +600,8 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca Studio (Phase 20): agent/workflow builder — system prompts, model
-   selection, tool configuration, workflow definitions, saved
-   configurations, a testing console, execution results.
-2. App backend (Phase 21): endpoints for future mobile/desktop apps.
-3. Full integration tests (Phase 22), documentation (Phase 23),
+1. App backend (Phase 21): endpoints for future mobile/desktop apps —
+   auth, server discovery, cluster status, AI conversations,
+   notifications, nodes/apps/models/jobs.
+2. Full integration tests (Phase 22), documentation (Phase 23),
    platform-wide testing/fixes/cleanup (Phase 24).

@@ -23,7 +23,12 @@ import { createAuthRouter } from "./routes/auth.js";
 import { createClusterRouter } from "./routes/cluster.js";
 import { createCommandsRouter } from "./routes/commands.js";
 import { createNodesRouter } from "./routes/nodes.js";
+import { createStudioRouter } from "./routes/studio.js";
 import { createUsersRouter } from "./routes/users.js";
+import { AgentConfigStore } from "./studioAgentConfigStore.js";
+import { RunStore as StudioRunStore } from "./studioRunStore.js";
+import { StudioService } from "./studioService.js";
+import { WorkflowStore } from "./studioWorkflowStore.js";
 
 export interface ApiServerHandle {
   httpServer: Server;
@@ -38,6 +43,7 @@ export interface ApiServerHandle {
   update: UpdateService;
   aiGateway: AiGatewayService;
   conversations: ConversationStore;
+  studio: StudioService;
   realtime: RealtimeHub;
   logger: Logger;
   close: () => Promise<void>;
@@ -110,6 +116,25 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     },
   });
 
+  const studioAgentConfigs = new AgentConfigStore(join(config.dataDir, "studio"));
+  await studioAgentConfigs.init();
+  const studioWorkflows = new WorkflowStore(join(config.dataDir, "studio"));
+  await studioWorkflows.init();
+  const studioRuns = new StudioRunStore(join(config.dataDir, "studio"));
+  await studioRuns.init();
+  const studio = new StudioService({
+    agentConfigs: studioAgentConfigs,
+    workflows: studioWorkflows,
+    runs: studioRuns,
+    runtime: {
+      complete: async (model, messages) => {
+        const response = await aiGateway.chatCompletion({ model, messages });
+        return response.choices[0]?.message.content ?? "";
+      },
+    },
+    logger,
+  });
+
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -142,6 +167,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     requireAuth(config.sessionSecret),
     createConversationsRouter(conversations, aiGateway),
   );
+  app.use("/api/v1/studio", requireAuth(config.sessionSecret), createStudioRouter(studio));
   app.use(
     "/api/v1/apps",
     requireAuth(config.sessionSecret),
@@ -191,6 +217,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     update,
     aiGateway,
     conversations,
+    studio,
     realtime,
     logger,
     close: async () => {

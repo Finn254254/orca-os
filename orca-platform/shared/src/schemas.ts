@@ -369,6 +369,64 @@ export const ModelRecordSchema = z.object({
 });
 export type ModelRecord = z.infer<typeof ModelRecordSchema>;
 
+// ---- Orca Studio (agent/workflow builder) ----
+
+export const StudioAgentConfigSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  systemPrompt: z.string(),
+  model: z.string(),
+  tools: z.array(z.string()).default([]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type StudioAgentConfig = z.infer<typeof StudioAgentConfigSchema>;
+
+export const StudioWorkflowStepSchema = z.object({
+  agentConfigId: z.string(),
+  label: z.string().optional(),
+});
+export type StudioWorkflowStep = z.infer<typeof StudioWorkflowStepSchema>;
+
+export const StudioWorkflowSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  steps: z.array(StudioWorkflowStepSchema).min(1),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type StudioWorkflow = z.infer<typeof StudioWorkflowSchema>;
+
+export const StudioRunStepResultSchema = z.object({
+  agentConfigId: z.string(),
+  input: z.string(),
+  output: z.string().optional(),
+  error: z.string().optional(),
+  latencyMs: z.number().nonnegative(),
+});
+export type StudioRunStepResult = z.infer<typeof StudioRunStepResultSchema>;
+
+export const StudioRunStatusSchema = z.enum(["running", "succeeded", "failed"]);
+export type StudioRunStatus = z.infer<typeof StudioRunStatusSchema>;
+
+export const StudioRunSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  kind: z.enum(["agent", "workflow"]),
+  agentConfigId: z.string().optional(),
+  workflowId: z.string().optional(),
+  input: z.string(),
+  status: StudioRunStatusSchema,
+  steps: z.array(StudioRunStepResultSchema).default([]),
+  output: z.string().optional(),
+  error: z.string().optional(),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
+});
+export type StudioRun = z.infer<typeof StudioRunSchema>;
+
 // ---- Security / users ----
 
 export const UserRoleSchema = z.enum(["admin", "operator", "viewer"]);

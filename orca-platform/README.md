@@ -32,7 +32,7 @@ orca-platform/
 ├── backup/          Backup management
 ├── security/        Users, auth, sessions, secrets, audit
 ├── ai/              Orca AI: user-facing chat app
-├── studio/          Orca Studio: agent/workflow builder
+├── studio/          Orca Studio: agent/workflow builder app
 ├── app-backend/     Backend endpoints for future mobile/desktop apps
 ├── tests/           Cross-service integration tests
 ├── docs/            Architecture, progress, OS integration notes
@@ -60,14 +60,15 @@ cd orca-platform
 npm install
 npm test                 # run every workspace's test suite
 npx tsc -b tsconfig.json # typecheck the whole platform (backend packages)
-npm run dev:cluster      # start Control + 3 simulated nodes + API + Dashboard + Orca AI
+npm run dev:cluster      # start Control + 3 simulated nodes + API + Dashboard + Orca AI + Orca Studio
 ```
 
-Then open http://localhost:5173 (Dashboard) or http://localhost:5174 (Orca
-AI) and log in with `admin` / `admin-password` (override via
-`ORCA_ADMIN_USERNAME`/`ORCA_ADMIN_PASSWORD`). Press Ctrl+C to stop
-everything — `scripts/dev-cluster.mjs` owns the child processes and shuts
-them all down together.
+Then open http://localhost:5173 (Dashboard), http://localhost:5174 (Orca
+AI), or http://localhost:5175 (Orca Studio) and log in with `admin` /
+`admin-password` (override via `ORCA_ADMIN_USERNAME`/
+`ORCA_ADMIN_PASSWORD`). Press Ctrl+C to stop everything —
+`scripts/dev-cluster.mjs` owns the child processes and shuts them all
+down together.
 
 Alternatively, with Docker:
 

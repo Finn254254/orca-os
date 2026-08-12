@@ -32,6 +32,16 @@ Subsystems mounted as libraries (see each package's own README for detail):
 OpenAI-compatible), `/apps` (`@orca/deploy`), `/storage` (`@orca/storage`),
 `/updates` (`@orca/update`), `/backups` (`@orca/backup`).
 
+Orca AI and Orca Studio's backends live directly in this package rather
+than as separate `@orca/*` libraries, since every resource they expose is
+per-user application state (conversations, agent configs, workflows, run
+history) rather than cluster-wide state a CLI/Control-level consumer would
+need: `/ai/conversations` (`conversationStore.ts`, `routes/conversations.ts`)
+and `/studio/*` (`studioAgentConfigStore.ts`, `studioWorkflowStore.ts`,
+`studioRunStore.ts`, `studioService.ts`, `routes/studio.ts`). Both are
+mounted behind `requireAuth` only (no admin/operator `writeGuard`), since
+ownership is checked per-resource against the caller's own `userId`.
+
 `GET /audit` (admin only) — every mutating request, recorded automatically.
 `GET /openapi.json` — hand-maintained API description, extended alongside
 each new route.

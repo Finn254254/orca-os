@@ -73,6 +73,44 @@ export function buildOpenApiSpec(): Record<string, unknown> {
           responses: { "200": { description: "SSE stream (OpenAI-compatible chunks)" } },
         },
       },
+      "/studio/agents": {
+        get: { summary: "List the current user's Orca Studio agent configs", security: [bearerAuth], responses: { "200": { description: "Agent configs" } } },
+        post: { summary: "Create an agent config (name, systemPrompt, model, tools?)", security: [bearerAuth], responses: { "201": { description: "Agent config" } } },
+      },
+      "/studio/agents/{id}": {
+        get: { summary: "Get an agent config (owner only)", security: [bearerAuth], responses: { "200": { description: "Agent config" }, "404": { description: "Not found" } } },
+        put: { summary: "Update an agent config", security: [bearerAuth], responses: { "200": { description: "Agent config" } } },
+        delete: { summary: "Delete an agent config", security: [bearerAuth], responses: { "204": { description: "Deleted" } } },
+      },
+      "/studio/agents/{id}/run": {
+        post: {
+          summary: "Testing console: run the agent config against `input` through the AI Gateway and record the result",
+          security: [bearerAuth],
+          responses: { "202": { description: "Run (succeeded or failed)" }, "404": { description: "Not found" } },
+        },
+      },
+      "/studio/workflows": {
+        get: { summary: "List the current user's Orca Studio workflows", security: [bearerAuth], responses: { "200": { description: "Workflows" } } },
+        post: { summary: "Create a workflow (name, steps: [{agentConfigId}])", security: [bearerAuth], responses: { "201": { description: "Workflow" } } },
+      },
+      "/studio/workflows/{id}": {
+        get: { summary: "Get a workflow (owner only)", security: [bearerAuth], responses: { "200": { description: "Workflow" }, "404": { description: "Not found" } } },
+        put: { summary: "Update a workflow", security: [bearerAuth], responses: { "200": { description: "Workflow" } } },
+        delete: { summary: "Delete a workflow", security: [bearerAuth], responses: { "204": { description: "Deleted" } } },
+      },
+      "/studio/workflows/{id}/run": {
+        post: {
+          summary: "Testing console: run the workflow's steps in order against `input`, chaining each output into the next input",
+          security: [bearerAuth],
+          responses: { "202": { description: "Run (succeeded or failed)" }, "404": { description: "Not found" } },
+        },
+      },
+      "/studio/runs": {
+        get: { summary: "List the current user's Orca Studio run history", security: [bearerAuth], responses: { "200": { description: "Runs" } } },
+      },
+      "/studio/runs/{id}": {
+        get: { summary: "Get a run (owner only)", security: [bearerAuth], responses: { "200": { description: "Run" }, "404": { description: "Not found" } } },
+      },
       "/ai/models": {
         get: { summary: "List available models (OpenAI-compatible)", security: [bearerAuth], responses: { "200": { description: "Model list" } } },
       },
