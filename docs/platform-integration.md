@@ -21,6 +21,10 @@ The host agent owns the local node record. The local read-only API binds only to
 
 Platform services may read these endpoints locally. They must not expose them remotely or alter the OS state directory directly. Remote access, authentication, node discovery, scheduling, and user-facing APIs belong to the platform layer.
 
+## CLI data contract
+
+Platform installers and diagnostics may run `orca info --json` to read OS identity and hardware information. The result includes `schemaVersion`, `name`, `version`, `hostname`, `architecture`, `kernel`, `cpu`, `memoryMiB`, and `virtualization`. Consumers must ignore unknown fields so this schema can grow additively.
+
 ## Image integration
 
 The image build copies OS files through `tools/install-rootfs.sh`. Platform components should be delivered independently, then installed by an explicit future OS integration package rather than added to the base image implicitly.

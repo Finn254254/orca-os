@@ -17,6 +17,25 @@ grep -q 'Name: Orca OS 0.1.0 (Tidepool)' <<<"$info"
 grep -q 'Architecture:' <<<"$info"
 grep -q 'CPU:' <<<"$info"
 grep -q 'Memory MiB:' <<<"$info"
+info_json="$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" info --json)"
+python3 - "$info_json" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["schemaVersion"] == 1
+assert payload["name"] == "Orca OS 0.1.0 (Tidepool)"
+assert payload["version"] == "0.1.0"
+assert payload["architecture"]
+assert payload["kernel"]
+assert payload["cpu"]["model"]
+assert isinstance(payload["cpu"]["cores"], int)
+assert isinstance(payload["memoryMiB"], int)
+PY
+if ORCA_ROOT="$temp_root" "$project_root/cli/orca" info --unknown >/dev/null 2>&1; then
+  echo 'info unexpectedly accepted an unknown option' >&2
+  exit 1
+fi
 
 status="$(ORCA_ROOT="$temp_root" "$project_root/cli/orca" status)"
 grep -q 'Agent: inactive' <<<"$status"

@@ -25,7 +25,12 @@ orca_version() {
 }
 
 command_info() {
-  local hostname kernel os_name architecture cpu_model cpu_cores memory_mib virtualization
+  local hostname kernel os_name architecture cpu_model cpu_cores memory_mib virtualization version
+  case "${1:-}" in
+    "") ;;
+    --json) ;;
+    *) echo "Usage: orca info [--json]" >&2; return 2 ;;
+  esac
   hostname="$(hostname 2>/dev/null || printf unknown)"
   kernel="$(uname -r 2>/dev/null || printf unknown)"
   architecture="$(uname -m 2>/dev/null || printf unknown)"
@@ -37,11 +42,48 @@ command_info() {
   [[ -n "$os_name" ]] || os_name="Orca OS"
   [[ -n "$cpu_model" ]] || cpu_model="unknown"
   [[ -n "$memory_mib" ]] || memory_mib="unknown"
+  version="$(orca_version)"
+
+  if [[ "${1:-}" == "--json" ]]; then
+    ORCA_INFO_NAME="$os_name" \
+    ORCA_INFO_VERSION="$version" \
+    ORCA_INFO_HOSTNAME="$hostname" \
+    ORCA_INFO_ARCHITECTURE="$architecture" \
+    ORCA_INFO_KERNEL="$kernel" \
+    ORCA_INFO_CPU_MODEL="$cpu_model" \
+    ORCA_INFO_CPU_CORES="$cpu_cores" \
+    ORCA_INFO_MEMORY_MIB="$memory_mib" \
+    ORCA_INFO_VIRTUALIZATION="$virtualization" \
+      python3 - <<'PY'
+import json
+import os
+
+def number_or_string(name):
+    value = os.environ[name]
+    return int(value) if value.isdigit() else value
+
+print(json.dumps({
+    "schemaVersion": 1,
+    "name": os.environ["ORCA_INFO_NAME"],
+    "version": os.environ["ORCA_INFO_VERSION"],
+    "hostname": os.environ["ORCA_INFO_HOSTNAME"],
+    "architecture": os.environ["ORCA_INFO_ARCHITECTURE"],
+    "kernel": os.environ["ORCA_INFO_KERNEL"],
+    "cpu": {
+        "model": os.environ["ORCA_INFO_CPU_MODEL"],
+        "cores": number_or_string("ORCA_INFO_CPU_CORES"),
+    },
+    "memoryMiB": number_or_string("ORCA_INFO_MEMORY_MIB"),
+    "virtualization": os.environ["ORCA_INFO_VIRTUALIZATION"],
+}, separators=(",", ":")))
+PY
+    return
+  fi
 
   cat <<EOF
 Orca OS Information
 Name: $os_name
-Version: $(orca_version)
+Version: $version
 Hostname: $hostname
 Architecture: $architecture
 Kernel: $kernel
@@ -149,7 +191,7 @@ usage() {
 Usage: orca <command>
 
 Commands:
-  info       Print Orca and operating-system information
+  info       Print Orca and operating-system information; add --json for structured output
   status     Print local Orca node status; add --json for structured output
   node id    Print the persistent local node identity
   node show  Print the structured local node record
@@ -162,7 +204,7 @@ EOF
 }
 
 case "${1:-}" in
-  info) command_info ;;
+  info) shift; command_info "$@" ;;
   status) shift; command_status "$@" ;;
   node) shift; command_node "$@" ;;
   peer) shift; command_peer "$@" ;;

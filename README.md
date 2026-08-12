@@ -52,7 +52,7 @@ The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 ## Commands
 
 ```text
-orca info       Print Orca and operating-system identity
+orca info       Print Orca and operating-system identity; add --json for structured output
 orca status     Show Orca service and node status
 orca version    Print the Orca OS version
 orca node id    Print the persistent node identity
