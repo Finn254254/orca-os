@@ -6,6 +6,7 @@ import { createLogger, type Logger } from "@orca/shared";
 import type { ControlConfig } from "./config.js";
 import { createControlRouter } from "./http.js";
 import { startHealthSweeper } from "./health.js";
+import { requireServiceToken } from "./serviceAuth.js";
 import { ClusterStore } from "./store.js";
 
 export interface ControlServerHandle {
@@ -54,7 +55,7 @@ export async function createControlServer(config: ControlConfig): Promise<Contro
     logger.info({ nodeId }, "node disconnected");
   });
 
-  app.use("/api/v1", createControlRouter(store, mesh));
+  app.use("/api/v1", requireServiceToken(config.serviceToken), createControlRouter(store, mesh));
 
   const stopSweeper = startHealthSweeper(store, {
     onOffline: (nodeId) => logger.warn({ nodeId }, "node heartbeat timed out, marked offline"),

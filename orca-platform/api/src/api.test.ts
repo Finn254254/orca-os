@@ -131,6 +131,26 @@ describe("orca-api", () => {
     expect(res.body.paths["/jobs"]).toBeDefined();
   });
 
+  it("records an audit event for a mutating request and exposes it to admins only", async () => {
+    await request(apiBaseUrl)
+      .post("/api/v1/users")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ username: "audited-user", password: "pw123456", role: "viewer" });
+
+    const auditRes = await request(apiBaseUrl).get("/api/v1/audit").set("authorization", `Bearer ${adminToken}`);
+    expect(auditRes.status).toBe(200);
+    const entry = auditRes.body.find((e: { action: string }) => e.action === "POST /api/v1/users");
+    expect(entry).toBeTruthy();
+    expect(entry.actor).toContain("admin");
+
+    const loginEntry = auditRes.body.find((e: { action: string }) => e.action === "POST /api/v1/auth/login");
+    expect(loginEntry?.actor).toContain("admin");
+
+    const viewerLogin = await request(apiBaseUrl).post("/api/v1/auth/login").send({ username: "audited-user", password: "pw123456" });
+    const forbidden = await request(apiBaseUrl).get("/api/v1/audit").set("authorization", `Bearer ${viewerLogin.body.token}`);
+    expect(forbidden.status).toBe(403);
+  });
+
   it("submits, schedules, dispatches, and completes a job end-to-end through a real node", async () => {
     const client = new MeshClient({ url: controlWsUrl, token: CLUSTER_TOKEN, nodeId: "node_worker", name: "worker-1" });
     client.on("command", (command) => {

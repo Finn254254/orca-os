@@ -8,5 +8,8 @@ services that need users/auth).
   a user if none exist yet — no default/hard-coded credentials).
 - `tokens.ts` — stateless, expiring, HMAC-signed session tokens built on
   `@orca/shared`'s `signToken`/`verifyToken`.
+- `audit.ts` — `AuditLog`: durable, size-capped audit trail. Orca API
+  records every mutating request automatically via a global middleware
+  (see `docs/SECURITY.md`) rather than each route calling it by hand.
 
 Run tests: `npx vitest run --root security` (from `orca-platform/`).

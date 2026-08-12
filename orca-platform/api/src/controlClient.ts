@@ -9,14 +9,26 @@ export class ControlClientError extends Error {
   }
 }
 
-/** Thin client for Orca Control's internal REST API (trusted internal network). */
+/**
+ * Thin client for Orca Control's internal REST API. Trusted-internal-network
+ * by default; if `serviceToken` is provided it's sent as a Bearer token —
+ * set it (and Control's matching ORCA_CONTROL_SERVICE_TOKEN) to require
+ * service-to-service auth on that boundary. See docs/SECURITY.md.
+ */
 export class ControlClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly serviceToken?: string,
+  ) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: { "content-type": "application/json", ...init?.headers },
+      headers: {
+        "content-type": "application/json",
+        ...(this.serviceToken ? { authorization: `Bearer ${this.serviceToken}` } : {}),
+        ...init?.headers,
+      },
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");

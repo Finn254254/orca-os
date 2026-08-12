@@ -81,6 +81,13 @@ export function buildOpenApiSpec(): Record<string, unknown> {
           responses: { "202": { description: "Download started" } },
         },
       },
+      "/audit": {
+        get: {
+          summary: "List audit events (admin) — every non-GET /api/v1 request is recorded automatically",
+          security: [bearerAuth],
+          responses: { "200": { description: "Events" } },
+        },
+      },
       "/backups": {
         get: { summary: "List backup jobs", security: [bearerAuth], responses: { "200": { description: "Jobs" } } },
         post: { summary: "Run a backup (cluster-config/app-config; admin/operator)", security: [bearerAuth], responses: { "202": { description: "Job" } } },

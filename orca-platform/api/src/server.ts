@@ -7,12 +7,13 @@ import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/co
 import { AppStore, DeployService, createAppsRouter, startDeployPoller } from "@orca/deploy";
 import { BackupService, BackupStore, createBackupRouter, startBackupScheduler } from "@orca/backup";
 import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
-import { UserStore } from "@orca/security";
+import { AuditLog, UserStore } from "@orca/security";
 import { StorageService, StorageStore, createStorageRouter } from "@orca/storage";
 import { UpdateService, UpdateStore, createUpdateRouter, startUpdatePoller } from "@orca/update";
 import { createLogger, type Logger } from "@orca/shared";
 import type { ApiConfig } from "./config.js";
 import { ControlClient, ControlClientError } from "./controlClient.js";
+import { auditMiddleware } from "./middleware/audit.js";
 import { requireAuth, requireRole } from "./middleware/auth.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { createRealtimeHub, type RealtimeHub } from "./realtime.js";
@@ -25,6 +26,7 @@ import { createUsersRouter } from "./routes/users.js";
 export interface ApiServerHandle {
   httpServer: Server;
   users: UserStore;
+  audit: AuditLog;
   control: ControlClient;
   jobs: JobService;
   models: ModelService;
@@ -42,6 +44,8 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   const logger = createLogger("orca-api");
   const users = new UserStore(config.dataDir);
   await users.init();
+  const audit = new AuditLog(config.dataDir);
+  await audit.init();
 
   if (config.bootstrapAdminUsername && config.bootstrapAdminPassword) {
     const created = await users.bootstrapAdmin(config.bootstrapAdminUsername, config.bootstrapAdminPassword);
@@ -52,7 +56,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     );
   }
 
-  const control = new ControlClient(config.controlUrl);
+  const control = new ControlClient(config.controlUrl, process.env.ORCA_CONTROL_SERVICE_TOKEN);
 
   const jobStore = new JobStore(join(config.dataDir, "compute"));
   await jobStore.init();
@@ -103,9 +107,14 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   const app = express();
   app.use(cors());
   app.use(express.json());
+  app.use(auditMiddleware(audit));
 
   app.get("/api/v1/health", (_req, res) => res.json({ status: "ok", service: "orca-api", time: new Date().toISOString() }));
   app.get("/api/v1/openapi.json", (_req, res) => res.json(buildOpenApiSpec()));
+  app.get("/api/v1/audit", requireAuth(config.sessionSecret), requireRole("admin"), (req, res) => {
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
+    res.json(audit.list(limit));
+  });
   app.use("/api/v1/auth", createAuthRouter(users, config.sessionSecret));
   app.use("/api/v1/users", createUsersRouter(users, config.sessionSecret));
   app.use("/api/v1/nodes", createNodesRouter(control, config.sessionSecret));
@@ -161,6 +170,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   return {
     httpServer,
     users,
+    audit,
     control,
     jobs,
     models,
@@ -177,6 +187,9 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
       stopBackupScheduler();
       stopUpdatePoller();
       realtime.close();
+      // Give any just-fired res.on("finish") audit handlers a tick to enqueue their write before flushing.
+      await new Promise((resolve) => setImmediate(resolve));
+      await audit.flush();
       await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));
     },
   };

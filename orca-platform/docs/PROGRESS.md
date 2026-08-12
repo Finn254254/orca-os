@@ -4,7 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-17 complete.** Moving into Phase 18 (Security improvements).
+**Phases 1-18 complete.** Moving into Phase 19 (Orca AI).
 
 ## Completed
 
@@ -351,9 +351,37 @@ Last updated: 2026-08-11 (autonomous build session).
     architecture-only failure, restore-requires-succeeded-job, schedule
     CRUD + due-schedule execution via `pollSchedules`, router contract).
 
+- **Phase 18 — Security improvements**
+  - `docs/SECURITY.md` added: consolidated reference (fixes a dangling
+    reference to this file that `control/src/config.ts` had pointed to
+    since Phase 2).
+  - **Audit events**: `@orca/security`'s new `AuditLog` + a global Express
+    middleware (`api/src/middleware/audit.ts`) records every non-`GET`
+    `/api/v1/*` request automatically — actor, action, status — rather
+    than each route file needing to call it. `GET /api/v1/audit`
+    (admin-only). Caught and fixed a real race during development: the
+    audit write is fire-and-forget from a `res.on("finish")` handler, so a
+    test's `close()` could return before the write was flushed; added
+    `AuditLog.flush()` (same pattern as `JsonStore.flush()` used
+    elsewhere) plus a one-tick yield in `close()`.
+  - **Service-to-service auth** (Orca API ↔ Control): now opt-in via
+    `ORCA_CONTROL_SERVICE_TOKEN` — unset (default) keeps Control's
+    historical trusted-internal-network behavior; set it (and the same
+    value on Orca API) to require a Bearer token on every Control route
+    except `/health`. `ControlClient` sends it automatically when
+    configured.
+  - TLS on the mesh/HTTP servers remains deferred — documented in
+    `docs/SECURITY.md` as needing certificate provisioning across nodes,
+    more naturally an Orca OS/Hardware Daemon concern once physical nodes
+    exist.
+  - Tests: 4 in `security` (audit log CRUD/persistence/limit), 5 in
+    `control` (`requireServiceToken` unit tests) + 1 integration test
+    (full server with a configured token, `/health` still open), 1 in
+    `api` (audit event recorded + admin-only access enforced).
+
 ## Partially completed / next up
 
-- Phases 18-24: not started (see `orca-platform/README.md` for the full
+- Phases 19-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -370,11 +398,11 @@ references list — **remember to add new packages to that references array
 as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
-All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (12), `compute` (11), `scheduler` (10), `models`
+All tests currently green: `shared` (7), `mesh` (4), `security` (10),
+`control` (12), `agent` (12), `compute` (11), `scheduler` (10), `models`
 (21), `ai-gateway` (9), `deploy` (11), `storage` (11),
-`hardware-daemon` (16), `update` (18), `backup` (13), `api` (15),
-`cli` (7), `dashboard` (9), `tests` e2e (7) = 193/193.
+`hardware-daemon` (16), `update` (18), `backup` (13), `api` (16),
+`cli` (7), `dashboard` (9), `tests` e2e (7) = 204/204.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -420,10 +448,8 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Security improvements (Phase 18): audit event logging across
-   subsystems (users/nodes/commands/jobs/deployments/rollouts/backups),
-   secrets-handling review. TLS on the mesh (`wss://`) is noted but likely
-   deferred — it needs certificate provisioning/distribution across nodes,
-   which is more naturally an Orca OS/Hardware Daemon concern once
-   physical nodes exist; will assess scope when this phase starts.
-2. Orca AI (Phase 19): user-facing chat app via AI Gateway.
+1. Orca AI (Phase 19): user-facing chat app (React) via AI Gateway —
+   conversation history, model selection, streaming, markdown/code
+   rendering, server-side conversation storage.
+2. Orca Studio (Phase 20): agent/workflow builder.
+3. App backend (Phase 21): endpoints for future mobile/desktop apps.

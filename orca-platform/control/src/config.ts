@@ -5,6 +5,8 @@ export interface ControlConfig {
   dataDir: string;
   clusterToken: string;
   clusterName: string;
+  /** Optional: if set, Control's REST API requires this Bearer token. See docs/SECURITY.md. */
+  serviceToken?: string;
 }
 
 export function loadControlConfig(): ControlConfig {
@@ -21,5 +23,6 @@ export function loadControlConfig(): ControlConfig {
     dataDir,
     clusterToken,
     clusterName: process.env.ORCA_CLUSTER_NAME ?? "orca-cluster",
+    serviceToken: process.env.ORCA_CONTROL_SERVICE_TOKEN,
   };
 }

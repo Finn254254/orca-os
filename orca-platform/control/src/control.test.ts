@@ -152,4 +152,28 @@ describe("orca-control", () => {
     // afterEach still calls handle.close(); make it a no-op by re-pointing to a fresh, already-closed-safe handle.
     handle = { ...handle, close: async () => undefined };
   });
+
+  it("requires a service token when ORCA_CONTROL_SERVICE_TOKEN-equivalent config is set, but always allows /health", async () => {
+    const tokenDir = await mkdtemp(join(tmpdir(), "orca-control-svc-"));
+    const tokenHandle = await createControlServer({
+      port: 0,
+      dataDir: tokenDir,
+      clusterToken: TOKEN,
+      clusterName: "test-cluster",
+      serviceToken: "internal-secret",
+    });
+    try {
+      const address = tokenHandle.httpServer.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const base = `http://127.0.0.1:${port}`;
+
+      expect((await request(base).get("/api/v1/health")).status).toBe(200);
+      expect((await request(base).get("/api/v1/nodes")).status).toBe(401);
+      expect((await request(base).get("/api/v1/nodes").set("authorization", "Bearer wrong")).status).toBe(401);
+      expect((await request(base).get("/api/v1/nodes").set("authorization", "Bearer internal-secret")).status).toBe(200);
+    } finally {
+      await tokenHandle.close();
+      await rm(tokenDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
 });

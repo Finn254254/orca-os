@@ -1,8 +1,8 @@
 # @orca/api
 
-Orca API: the main gateway for the Orca ecosystem. User-authenticated,
-versioned REST under `/api/v1`, plus a realtime WebSocket at `/ws`. Proxies
-Orca Control (nodes/cluster/commands) and owns users/authentication itself.
+Orca API: the main gateway for the Orca ecosystem — the only service end
+users/apps/CLI/Dashboard talk to directly. User-authenticated, versioned
+REST under `/api/v1`, plus a realtime WebSocket at `/ws`.
 
 ## Running
 
@@ -16,34 +16,35 @@ npm run dev
 
 `ORCA_ADMIN_USERNAME`/`ORCA_ADMIN_PASSWORD` only take effect once, to create
 the first admin user if none exist yet — never hard-coded, always from env.
+Set `ORCA_CONTROL_SERVICE_TOKEN` to match Control's if Control requires
+service auth (see `docs/SECURITY.md`).
 
 ## Endpoints (`/api/v1`)
 
-- `POST /auth/login`, `GET /auth/me`
-- `GET/POST /users`, `DELETE /users/:id` (admin only)
-- `GET /nodes`, `GET /nodes/:id`, `GET /nodes/:id/metrics`
-- `GET/POST /nodes/:id/commands` (POST requires admin/operator)
-- `GET /commands`, `GET /commands/:id`
-- `GET/PUT /cluster/config` (PUT requires admin)
-- `GET/POST /cluster/groups` (POST requires admin/operator)
-- `GET /openapi.json` — machine-readable API description (hand-maintained,
-  extended alongside each new route)
+Auth/users: `POST /auth/login`, `GET /auth/me`, `GET/POST /users`,
+`DELETE /users/:id` (admin only).
+
+Cluster (proxies Orca Control): `GET/PUT /cluster/config`,
+`GET/POST /cluster/groups`, `GET /nodes[...]`, `GET/POST /commands[...]`.
+
+Subsystems mounted as libraries (see each package's own README for detail):
+`/jobs` (`@orca/compute`), `/models` (`@orca/models`), `/ai` (`@orca/ai-gateway`,
+OpenAI-compatible), `/apps` (`@orca/deploy`), `/storage` (`@orca/storage`),
+`/updates` (`@orca/update`), `/backups` (`@orca/backup`).
+
+`GET /audit` (admin only) — every mutating request, recorded automatically.
+`GET /openapi.json` — hand-maintained API description, extended alongside
+each new route.
 
 Every route except `/auth/login`, `/health`, and `/openapi.json` requires
-`Authorization: Bearer <session-token>` from `/auth/login`.
+`Authorization: Bearer <session-token>` from `/auth/login`. Mutating routes
+generally require `admin`/`operator`; reads are open to any authenticated
+role. See `docs/SECURITY.md` for the full auth/audit picture.
 
 ## Realtime (`/ws`)
 
 Broadcasts `RealtimeEvent`s (see `@orca/shared`) on the `node` and `metrics`
-channels today, sourced by polling Control (`ORCA_API_POLL_INTERVAL_MS`,
-default 1000ms) and diffing against the last-seen snapshot. `job`, `log`,
-and `alert` channels will start broadcasting once Compute/Backup/etc. exist
-to produce that data — the event envelope already supports them.
-
-## Auth model
-
-Session tokens are stateless HMAC-signed tokens (no server-side session
-store), so **logout is client-side only for now** — there's no revocation
-list yet. Documented as a known limitation; see `docs/PROGRESS.md`.
+channels, sourced by polling Control (`ORCA_API_POLL_INTERVAL_MS`, default
+1000ms) and diffing against the last-seen snapshot.
 
 Run tests: `npx vitest run --root api` (from `orca-platform/`).

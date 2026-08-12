@@ -23,6 +23,10 @@ Environment variables:
 - `ORCA_DATA_DIR` (default `./data`) — where `cluster-state.json` is
   persisted.
 - `ORCA_CLUSTER_NAME` (default `orca-cluster`)
+- `ORCA_CONTROL_SERVICE_TOKEN` (optional) — if set, every `/api/v1/*`
+  route except `/health` requires this as a Bearer token (service-to-
+  service auth for the Orca API ↔ Control boundary; unset means trusted-
+  internal-network, the historical default). See `docs/SECURITY.md`.
 
 ## HTTP API (`/api/v1`)
 
