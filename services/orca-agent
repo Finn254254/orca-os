@@ -18,13 +18,20 @@ else
   printf '%s\n' "$node_id" > "$node_id_file"
 fi
 
+[[ "$node_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || {
+  echo "Orca node ID is invalid." >&2
+  exit 1
+}
+
 write_status() {
-  local hostname architecture kernel updated pid
+  local hostname architecture kernel updated pid cpu_cores memory_mib temp_record
   hostname="$(hostname)"
   architecture="$(uname -m)"
   kernel="$(uname -r)"
   updated="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   pid="$$"
+  cpu_cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 0)"
+  memory_mib="$(awk '/MemTotal/ { printf "%d", $2 / 1024; exit }' /proc/meminfo 2>/dev/null || printf 0)"
 
   cat > "$runtime_dir/agent.status" <<EOF
 Agent: active
@@ -33,12 +40,42 @@ Hostname: $hostname
 Updated: $updated
 PID: $pid
 EOF
-  cat > "$runtime_dir/node.json" <<EOF
-{"schemaVersion":1,"nodeId":"$node_id","hostname":"$hostname","architecture":"$architecture","kernel":"$kernel","agent":"active","pid":$pid,"updated":"$updated"}
-EOF
+  temp_record="$runtime_dir/node.json.tmp.$$"
+  ORCA_RECORD_NODE_ID="$node_id" \
+  ORCA_RECORD_HOSTNAME="$hostname" \
+  ORCA_RECORD_ARCHITECTURE="$architecture" \
+  ORCA_RECORD_KERNEL="$kernel" \
+  ORCA_RECORD_PID="$pid" \
+  ORCA_RECORD_CPU_CORES="$cpu_cores" \
+  ORCA_RECORD_MEMORY_MIB="$memory_mib" \
+  ORCA_RECORD_UPDATED="$updated" \
+    python3 - "$temp_record" <<'PY'
+import json
+import os
+import sys
+
+record = {
+    "schemaVersion": 1,
+    "nodeId": os.environ["ORCA_RECORD_NODE_ID"],
+    "hostname": os.environ["ORCA_RECORD_HOSTNAME"],
+    "architecture": os.environ["ORCA_RECORD_ARCHITECTURE"],
+    "kernel": os.environ["ORCA_RECORD_KERNEL"],
+    "agent": "active",
+    "pid": int(os.environ["ORCA_RECORD_PID"]),
+    "resources": {
+        "cpuCores": int(os.environ["ORCA_RECORD_CPU_CORES"]),
+        "memoryMiB": int(os.environ["ORCA_RECORD_MEMORY_MIB"]),
+    },
+    "updated": os.environ["ORCA_RECORD_UPDATED"],
+}
+with open(sys.argv[1], "w", encoding="utf-8") as output:
+    json.dump(record, output, separators=(",", ":"))
+    output.write("\n")
+PY
+  mv "$temp_record" "$runtime_dir/node.json"
 }
 
-trap 'rm -f "$runtime_dir/agent.status" "$runtime_dir/node.json"; exit 0' TERM INT
+trap 'rm -f "$runtime_dir/agent.status" "$runtime_dir/node.json" "$runtime_dir"/node.json.tmp.*; exit 0' TERM INT
 while true; do
   write_status
   sleep "$interval" & wait $!

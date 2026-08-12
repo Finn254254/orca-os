@@ -24,10 +24,27 @@ for _ in {1..20}; do
 done
 
 grep -q 'Node ID: test-node-123' "$temp_root/run/agent.status"
-grep -q '"nodeId":"test-node-123"' "$temp_root/run/node.json"
-grep -q '"pid":' "$temp_root/run/node.json"
+python3 - "$temp_root/run/node.json" "$agent_pid" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as record_file:
+    record = json.load(record_file)
+assert record["schemaVersion"] == 1
+assert record["nodeId"] == "test-node-123"
+assert record["pid"] == int(sys.argv[2])
+assert record["architecture"]
+assert record["kernel"]
+assert record["resources"]["cpuCores"] > 0
+assert record["resources"]["memoryMiB"] > 0
+PY
 kill "$agent_pid"
 wait "$agent_pid" || true
 agent_pid=""
 test ! -e "$temp_root/run/agent.status"
 test ! -e "$temp_root/run/node.json"
+
+if ORCA_RUNTIME_DIR="$temp_root/bad-run" ORCA_STATE_DIR="$temp_root/bad-state" ORCA_NODE_ID='bad/node' "$project_root/services/orca-agent" >/dev/null 2>&1; then
+  echo 'agent accepted an invalid node ID' >&2
+  exit 1
+fi

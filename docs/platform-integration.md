@@ -22,6 +22,8 @@ The host agent owns the local node record. The local read-only API binds only to
 
 Platform services may read these endpoints locally. They must not expose them remotely or alter the OS state directory directly. Remote access, authentication, node discovery, scheduling, and user-facing APIs belong to the platform layer.
 
+The `/v1/node` record is written atomically and includes `schemaVersion`, `nodeId`, `hostname`, `architecture`, `kernel`, `agent`, `pid`, `resources.cpuCores`, `resources.memoryMiB`, and `updated`. Consumers must ignore unknown fields.
+
 ## CLI data contract
 
 Platform installers and diagnostics may run `orca info --json` to read OS identity and hardware information. The result includes `schemaVersion`, `name`, `version`, `hostname`, `architecture`, `kernel`, `cpu`, `memoryMiB`, and `virtualization`. Consumers must ignore unknown fields so this schema can grow additively.
