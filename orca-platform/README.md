@@ -59,9 +59,24 @@ orca-platform/
 cd orca-platform
 npm install
 npm test                 # run every workspace's test suite
-npx tsc -b tsconfig.json # typecheck the whole platform
+npx tsc -b tsconfig.json # typecheck the whole platform (backend packages)
 npm run dev:cluster      # start Control + 3 simulated nodes + API + Dashboard
 ```
+
+Then open http://localhost:5173 and log in with `admin` / `admin-password`
+(override via `ORCA_ADMIN_USERNAME`/`ORCA_ADMIN_PASSWORD`). Press Ctrl+C to
+stop everything — `scripts/dev-cluster.mjs` owns the child processes and
+shuts them all down together.
+
+Alternatively, with Docker:
+
+```bash
+docker compose up --build
+```
+
+does the same thing in containers (see `docker-compose.yml` — validated
+with `docker compose config`; `npm run dev:cluster` is the path actually
+exercised by the test suite, see `tests/e2e/dev-cluster.test.ts`).
 
 See `docs/PROGRESS.md` for current status and `docs/ARCHITECTURE.md` for the
 system design.

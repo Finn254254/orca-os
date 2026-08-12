@@ -1,0 +1,133 @@
+# One-command local Orca cluster: Control + 3 simulated nodes + API + Dashboard.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:5173 and log in with the ORCA_ADMIN_USERNAME /
+# ORCA_ADMIN_PASSWORD below (override via a .env file or exported env vars —
+# these defaults are for local development only, never use them in
+# production). This is an alternative to `npm run dev:cluster`
+# (scripts/dev-cluster.mjs), which does the same thing without Docker.
+#
+# NOTE: keep the `control`/`agent`/`api`/`dashboard` package list in
+# Dockerfile's COPY steps in sync as new orca-platform packages are added.
+
+x-orca-env: &orca-env
+  ORCA_CLUSTER_TOKEN: ${ORCA_CLUSTER_TOKEN:-dev-cluster-token}
+  ORCA_LOG_PRETTY: "0"
+
+services:
+  control:
+    build: .
+    image: orca-platform-dev:latest
+    command: ["control/src/index.ts"]
+    environment:
+      <<: *orca-env
+      ORCA_CONTROL_PORT: "7000"
+      ORCA_DATA_DIR: /app/data/control
+    ports:
+      - "7000:7000"
+    volumes:
+      - orca-control-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:7000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  sim-node-01:
+    image: orca-platform-dev:latest
+    command: ["agent/src/index.ts"]
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      <<: *orca-env
+      ORCA_CONTROL_URL: ws://control:7000/mesh
+      ORCA_NODE_NAME: sim-node-01
+      ORCA_NODE_GROUP: default
+      ORCA_SIMULATED: "1"
+      ORCA_SIM_CPU_CORES: "8"
+      ORCA_SIM_RAM_BYTES: "17179869184"
+      ORCA_DATA_DIR: /app/data/sim-node-01
+    volumes:
+      - orca-node1-data:/app/data
+
+  sim-node-02:
+    image: orca-platform-dev:latest
+    command: ["agent/src/index.ts"]
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      <<: *orca-env
+      ORCA_CONTROL_URL: ws://control:7000/mesh
+      ORCA_NODE_NAME: sim-node-02
+      ORCA_NODE_GROUP: default
+      ORCA_SIMULATED: "1"
+      ORCA_SIM_CPU_CORES: "16"
+      ORCA_SIM_RAM_BYTES: "34359738368"
+      ORCA_SIM_GPU: "1"
+      ORCA_DATA_DIR: /app/data/sim-node-02
+    volumes:
+      - orca-node2-data:/app/data
+
+  sim-node-03:
+    image: orca-platform-dev:latest
+    command: ["agent/src/index.ts"]
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      <<: *orca-env
+      ORCA_CONTROL_URL: ws://control:7000/mesh
+      ORCA_NODE_NAME: sim-node-03
+      ORCA_NODE_GROUP: edge
+      ORCA_SIMULATED: "1"
+      ORCA_SIM_CPU_CORES: "4"
+      ORCA_SIM_RAM_BYTES: "8589934592"
+      ORCA_DATA_DIR: /app/data/sim-node-03
+    volumes:
+      - orca-node3-data:/app/data
+
+  api:
+    image: orca-platform-dev:latest
+    command: ["api/src/index.ts"]
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      <<: *orca-env
+      ORCA_API_PORT: "8080"
+      ORCA_CONTROL_URL: http://control:7000
+      ORCA_SESSION_SECRET: ${ORCA_SESSION_SECRET:-dev-session-secret}
+      ORCA_ADMIN_USERNAME: ${ORCA_ADMIN_USERNAME:-admin}
+      ORCA_ADMIN_PASSWORD: ${ORCA_ADMIN_PASSWORD:-admin-password}
+      ORCA_DATA_DIR: /app/data/api
+    ports:
+      - "8080:8080"
+    volumes:
+      - orca-api-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  dashboard:
+    image: orca-platform-dev:latest
+    entrypoint: ["npx", "vite", "--host", "0.0.0.0", "--port", "5173"]
+    working_dir: /app/dashboard
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      ORCA_API_PROXY_TARGET: http://api:8080
+    ports:
+      - "5173:5173"
+
+volumes:
+  orca-control-data:
+  orca-node1-data:
+  orca-node2-data:
+  orca-node3-data:
+  orca-api-data:

@@ -4,9 +4,8 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-Phases 1-7 complete (scaffolding, shared libs, mesh, Control, Agent,
-end-to-end wiring, Orca API + security, Orca CLI, Orca Dashboard). Moving
-into Phase 8 (multi-node simulation environment + first demo).
+**Phases 1-8 complete — the first major demo works.** Moving into Phase 9
+(Compute jobs).
 
 ## Completed
 
@@ -153,9 +152,37 @@ into Phase 8 (multi-node simulation environment + first demo).
   - Tests: 9 unit/component (jsdom + Testing Library: session storage,
     login success/failure, `Meter`/`StatusPill` rendering) + 1 browser e2e.
 
+- **Phase 8 — Multi-node simulation environment + first major demo**
+  - `scripts/dev-cluster.mjs` (`npm run dev:cluster`): one command starts
+    Orca Control, 3 simulated Orca Agents (`sim-node-01`/`02` in the
+    `default` group, `sim-node-03` in an `edge` group, each with a
+    distinct CPU/RAM/GPU profile), Orca API, and Orca Dashboard; prints a
+    summary with URLs and the bootstrap admin login; Ctrl+C tears
+    everything down together. State persists under `data/dev-cluster/`
+    (gitignored) across restarts.
+  - `docker-compose.yml` + `Dockerfile`: the same topology as containers,
+    for users who prefer Docker. Structurally validated with
+    `docker compose config` (no Docker daemon was available in this build
+    session to actually run `docker compose up` — `npm run dev:cluster` is
+    the path the automated test suite exercises).
+  - **Demo verified end-to-end**, twice: once manually (curl against the
+    real running cluster confirmed all 3 nodes online with live CPU%), and
+    once as an automated test, `tests/e2e/dev-cluster.test.ts`, which spawns
+    `scripts/dev-cluster.mjs` itself (not its components individually) and
+    asserts: 3 nodes appear, all online, correct names/groups, live
+    (non-static) CPU metrics flowing. Combined with the Phase 7 Playwright
+    browser test (login → live node table → node detail), this covers the
+    "first major demo" checklist: node registration, heartbeats,
+    online/offline detection, live metrics, command execution, real-time
+    dashboard updates — everything except job submission/scheduling, which
+    starts in Phase 9.
+  - `docs/ARCHITECTURE.md` added: process topology, why Compute/Scheduler/
+    Model Manager/etc. are planned as libraries mounted into Orca API
+    rather than separate services, mesh protocol summary, realtime design.
+
 ## Partially completed / next up
 
-- Phases 8-24: not started (see `orca-platform/README.md` for the full
+- Phases 9-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -174,7 +201,7 @@ whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
 `control` (6), `agent` (6), `api` (6), `cli` (7), `dashboard` (9),
-`tests` e2e (3) = 54/54.
+`tests` e2e (4) = 55/55.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -220,7 +247,8 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Multi-node simulation environment + first demo (Phase 8): this is the
-   point where `orca-platform/scripts/dev-cluster.mjs` and/or a
-   docker-compose file need to actually exist and start Control + 3
-   simulated Agents + API + Dashboard with one command.
+1. Orca Compute (Phase 9): job records (queued/scheduled/running/succeeded/
+   failed/cancelled), submission/execution on a single node to start, logs,
+   mounted into Orca API as `/api/v1/jobs`.
+2. Orca Scheduler (Phase 10): node scoring/selection for job placement.
+3. Orca Model Manager (Phase 11): registry + Ollama/llama.cpp adapters.
