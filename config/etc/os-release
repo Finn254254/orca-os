@@ -1,0 +1,11 @@
+NAME="Orca OS"
+PRETTY_NAME="Orca OS 0.1.0 (Tidepool)"
+ID=orca
+ID_LIKE=debian
+VERSION="0.1.0 (Tidepool)"
+VERSION_ID="0.1.0"
+VERSION_CODENAME=tidepool
+ANSI_COLOR="1;38;2;255;106;57"
+HOME_URL="https://github.com/Finn254254/orca-os"
+SUPPORT_URL="https://github.com/Finn254254/orca-os/issues"
+BUG_REPORT_URL="https://github.com/Finn254254/orca-os/issues"

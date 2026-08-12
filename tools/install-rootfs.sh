@@ -11,6 +11,7 @@ install -Dm644 "$project_root/services/orca-agent.service" "$rootfs/usr/lib/syst
 install -Dm644 "$project_root/services/orca-api.service" "$rootfs/usr/lib/systemd/system/orca-api.service"
 install -Dm644 "$project_root/services/orca-ready.service" "$rootfs/usr/lib/systemd/system/orca-ready.service"
 install -Dm644 "$project_root/config/etc/orca-release" "$rootfs/etc/orca-release"
+install -Dm644 "$project_root/config/etc/os-release" "$rootfs/etc/os-release"
 install -Dm644 "$project_root/config/systemd/serial-getty@ttyS0.service.d/orca-autologin.conf" \
   "$rootfs/etc/systemd/system/serial-getty@ttyS0.service.d/orca-autologin.conf"
 

@@ -2,7 +2,7 @@
 
 Orca OS is a minimal, appliance-style Linux platform for Orca servers and compute nodes.
 
-Milestone 1 provides a reproducible x86-64 VM image definition, the `orca` command-line tool, an identity file at `/etc/orca-release`, and the `orca-agent` systemd service. The image is designed for QEMU first, with ARM64 support kept as a separate future target.
+Milestone 1 provides a reproducible x86-64 VM image definition, the `orca` command-line tool, Orca identity through both `/etc/orca-release` and the standard `/etc/os-release`, and the `orca-agent` systemd service. The image is designed for QEMU first, with ARM64 support kept as a separate future target.
 
 ## Quick start
 

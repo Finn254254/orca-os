@@ -5,6 +5,7 @@ Orca OS owns the host operating-system layer. The Orca platform lives in `/orca-
 ## OS-owned paths
 
 - `/etc/orca-release` — operating-system identity
+- `/etc/os-release` — standard Linux identity branded as Orca OS
 - `/usr/local/bin/orca` — host CLI
 - `/usr/lib/orca/` — host agent and loopback management API
 - `/var/lib/orca/` — persistent node identity and OS state
