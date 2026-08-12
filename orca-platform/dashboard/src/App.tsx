@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { getToken } from "./api.js";
+import { Apps } from "./pages/Apps.js";
 import { ComingSoon } from "./pages/ComingSoon.js";
 import { Jobs } from "./pages/Jobs.js";
 import { Login } from "./pages/Login.js";
@@ -9,6 +10,7 @@ import { NodeDetail } from "./pages/NodeDetail.js";
 import { Nodes } from "./pages/Nodes.js";
 import { Overview } from "./pages/Overview.js";
 import { Settings } from "./pages/Settings.js";
+import { Storage } from "./pages/Storage.js";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   if (!getToken()) return <Navigate to="/login" replace />;
@@ -71,7 +73,7 @@ export function App() {
         path="/storage"
         element={
           <RequireAuth>
-            <ComingSoon title="Storage" phase="Phase 14" />
+            <Storage />
           </RequireAuth>
         }
       />
@@ -79,7 +81,7 @@ export function App() {
         path="/apps"
         element={
           <RequireAuth>
-            <ComingSoon title="Applications" phase="Phase 13 (Orca Deploy)" />
+            <Apps />
           </RequireAuth>
         }
       />

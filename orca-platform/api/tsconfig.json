@@ -12,7 +12,9 @@
     { "path": "../scheduler" },
     { "path": "../compute" },
     { "path": "../models" },
-    { "path": "../ai-gateway" }
+    { "path": "../ai-gateway" },
+    { "path": "../deploy" },
+    { "path": "../storage" }
   ],
   "include": ["src"]
 }

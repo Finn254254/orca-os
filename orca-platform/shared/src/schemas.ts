@@ -109,6 +109,8 @@ export const CommandTypeSchema = z.enum([
   "shell",
   "power",
   "run_job",
+  "deploy_app",
+  "remove_app",
 ]);
 export type CommandType = z.infer<typeof CommandTypeSchema>;
 
@@ -233,6 +235,56 @@ export const JobRecordSchema = z.object({
   failureReason: z.string().optional(),
 });
 export type JobRecord = z.infer<typeof JobRecordSchema>;
+
+// ---- Deploy (application manifests + deployments) ----
+
+export const RestartPolicySchema = z.enum(["always", "on-failure", "never"]);
+export type RestartPolicy = z.infer<typeof RestartPolicySchema>;
+
+export const PortMappingSchema = z.object({
+  containerPort: z.number().int().positive(),
+  hostPort: z.number().int().positive().optional(),
+  protocol: z.enum(["tcp", "udp"]).default("tcp"),
+});
+export type PortMapping = z.infer<typeof PortMappingSchema>;
+
+export const VolumeMountSchema = z.object({
+  hostPath: z.string(),
+  containerPath: z.string(),
+  readOnly: z.boolean().default(false),
+});
+export type VolumeMount = z.infer<typeof VolumeMountSchema>;
+
+export const AppManifestSchema = z.object({
+  name: z.string(),
+  version: z.string().default("latest"),
+  image: z.string(),
+  ports: z.array(PortMappingSchema).default([]),
+  volumes: z.array(VolumeMountSchema).default([]),
+  env: z.record(z.string(), z.string()).default({}),
+  resources: JobResourceRequestSchema.default({}),
+  targetCapabilities: z.array(z.string()).default([]),
+  targetNodeId: z.string().optional(),
+  targetGroup: z.string().optional(),
+  restartPolicy: RestartPolicySchema.default("on-failure"),
+});
+export type AppManifest = z.infer<typeof AppManifestSchema>;
+
+export const AppDeploymentStateSchema = z.enum(["pending", "scheduled", "deploying", "running", "failed", "stopped"]);
+export type AppDeploymentState = z.infer<typeof AppDeploymentStateSchema>;
+
+export const AppDeploymentSchema = z.object({
+  id: z.string(),
+  manifest: AppManifestSchema,
+  state: AppDeploymentStateSchema,
+  assignedNodeId: z.string().optional(),
+  schedulingReason: z.string().optional(),
+  containerId: z.string().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  error: z.string().optional(),
+});
+export type AppDeployment = z.infer<typeof AppDeploymentSchema>;
 
 // ---- Models ----
 

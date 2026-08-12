@@ -4,8 +4,10 @@ import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { AiGatewayService, createAiGatewayRouter } from "@orca/ai-gateway";
 import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/compute";
+import { AppStore, DeployService, createAppsRouter, startDeployPoller } from "@orca/deploy";
 import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
 import { UserStore } from "@orca/security";
+import { StorageService, StorageStore, createStorageRouter } from "@orca/storage";
 import { createLogger, type Logger } from "@orca/shared";
 import type { ApiConfig } from "./config.js";
 import { ControlClient, ControlClientError } from "./controlClient.js";
@@ -24,6 +26,8 @@ export interface ApiServerHandle {
   control: ControlClient;
   jobs: JobService;
   models: ModelService;
+  deploy: DeployService;
+  storage: StorageService;
   aiGateway: AiGatewayService;
   realtime: RealtimeHub;
   logger: Logger;
@@ -59,6 +63,15 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     logger,
   });
 
+  const appStore = new AppStore(join(config.dataDir, "deploy"));
+  await appStore.init();
+  const deploy = new DeployService({ store: appStore, control, logger });
+  const stopDeployPoller = startDeployPoller(deploy);
+
+  const storageStore = new StorageStore(join(config.dataDir, "storage"));
+  await storageStore.init();
+  const storage = new StorageService(control, storageStore);
+
   const aiGateway = new AiGatewayService({
     models: modelStore,
     runtimeUrls: {
@@ -89,6 +102,16 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     createModelsRouter(models, requireRole("admin", "operator")),
   );
   app.use("/api/v1/ai", requireAuth(config.sessionSecret), createAiGatewayRouter(aiGateway));
+  app.use(
+    "/api/v1/apps",
+    requireAuth(config.sessionSecret),
+    createAppsRouter(deploy, requireRole("admin", "operator")),
+  );
+  app.use(
+    "/api/v1/storage",
+    requireAuth(config.sessionSecret),
+    createStorageRouter(storage, requireRole("admin", "operator")),
+  );
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ControlClientError) {
@@ -111,11 +134,14 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     control,
     jobs,
     models,
+    deploy,
+    storage,
     aiGateway,
     realtime,
     logger,
     close: async () => {
       stopJobPoller();
+      stopDeployPoller();
       realtime.close();
       await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));
     },

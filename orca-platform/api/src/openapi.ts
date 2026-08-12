@@ -81,6 +81,32 @@ export function buildOpenApiSpec(): Record<string, unknown> {
           responses: { "202": { description: "Download started" } },
         },
       },
+      "/storage/devices": {
+        get: { summary: "List storage devices across the cluster", security: [bearerAuth], responses: { "200": { description: "Devices" } } },
+      },
+      "/storage/capacity": {
+        get: { summary: "Cluster-wide storage capacity", security: [bearerAuth], responses: { "200": { description: "Capacity" } } },
+      },
+      "/storage/pools": {
+        get: { summary: "List storage pools", security: [bearerAuth], responses: { "200": { description: "Pools" } } },
+        post: { summary: "Create a storage pool (admin/operator)", security: [bearerAuth], responses: { "201": { description: "Pool" } } },
+      },
+      "/storage/locations": {
+        get: { summary: "List named storage locations (model/dataset/app-data/backup)", security: [bearerAuth], responses: { "200": { description: "Locations" } } },
+        post: { summary: "Register a storage location (admin/operator)", security: [bearerAuth], responses: { "201": { description: "Location" } } },
+      },
+      "/apps": {
+        get: { summary: "List app deployments", security: [bearerAuth], responses: { "200": { description: "Deployments" } } },
+        post: {
+          summary: "Deploy an application from a manifest (admin/operator)",
+          security: [bearerAuth],
+          responses: { "202": { description: "Deployment accepted" } },
+        },
+      },
+      "/apps/{id}": {
+        get: { summary: "Get a deployment", security: [bearerAuth], responses: { "200": { description: "Deployment" }, "404": { description: "Not found" } } },
+        delete: { summary: "Remove an app (admin/operator)", security: [bearerAuth], responses: { "200": { description: "Deployment" } } },
+      },
       "/jobs": {
         get: { summary: "List compute jobs", security: [bearerAuth], responses: { "200": { description: "Jobs" } } },
         post: {

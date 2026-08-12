@@ -16,6 +16,8 @@
     "@orca/compute": "*",
     "@orca/models": "*",
     "@orca/ai-gateway": "*",
+    "@orca/deploy": "*",
+    "@orca/storage": "*",
     "express": "^5.0.0",
     "cors": "^2.8.5",
     "ws": "^8.18.0"

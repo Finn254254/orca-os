@@ -161,6 +161,41 @@ describe("orca-api", () => {
     client.stop();
   });
 
+  it("deploys and removes an app end-to-end through a real node", async () => {
+    const client = new MeshClient({ url: controlWsUrl, token: CLUSTER_TOKEN, nodeId: "node_deploy_worker", name: "deploy-worker-1" });
+    client.on("command", (command) => {
+      if (command.type === "deploy_app") client.sendCommandResult(command.id, "succeeded", { containerId: "container-abc" });
+      if (command.type === "remove_app") client.sendCommandResult(command.id, "succeeded", {});
+    });
+    client.start();
+    await waitFor(client, "ack");
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get("/api/v1/nodes").set("authorization", `Bearer ${adminToken}`);
+      return res.body.some((n: { status: string }) => n.status === "online");
+    });
+
+    const deployRes = await request(apiBaseUrl)
+      .post("/api/v1/apps")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ name: "web", image: "nginx" });
+    expect(deployRes.status).toBe(202);
+    expect(deployRes.body.assignedNodeId).toBe("node_deploy_worker");
+
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get(`/api/v1/apps/${deployRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+      return res.body.state === "running";
+    }, 5000);
+
+    const runningRes = await request(apiBaseUrl).get(`/api/v1/apps/${deployRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+    expect(runningRes.body.containerId).toBe("container-abc");
+
+    const removeRes = await request(apiBaseUrl).delete(`/api/v1/apps/${deployRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+    expect(removeRes.status).toBe(200);
+    expect(removeRes.body.state).toBe("stopped");
+
+    client.stop();
+  });
+
   it("rejects job submission from a viewer role but allows reading", async () => {
     await request(apiBaseUrl)
       .post("/api/v1/users")

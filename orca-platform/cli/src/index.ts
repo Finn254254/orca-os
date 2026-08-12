@@ -300,10 +300,74 @@ program
     }),
   );
 
-// --- Commands whose backing subsystems land in later phases (Deploy, Update, Hardware Daemon, Backup). ---
+interface AppDeploymentSummary {
+  id: string;
+  manifest: { name: string; image: string; version: string };
+  state: string;
+  assignedNodeId?: string;
+  createdAt: string;
+}
+
+program
+  .command("deploy <manifestFile>")
+  .description("Deploy an application from a manifest JSON file")
+  .action((manifestFile: string) =>
+    run(async () => {
+      const raw = await import("node:fs/promises").then((fs) => fs.readFile(manifestFile, "utf-8"));
+      const manifest = JSON.parse(raw);
+      const api = await client();
+      const deployment = await api.post<AppDeploymentSummary>("/api/v1/apps", manifest);
+      console.log(`app ${deployment.id} (${deployment.manifest.name}) — ${deployment.state}`);
+    }),
+  );
+
+program
+  .command("apps")
+  .description("List app deployments")
+  .option("--json", "output raw JSON")
+  .action((opts) =>
+    run(async () => {
+      const api = await client();
+      const apps = await api.get<AppDeploymentSummary[]>("/api/v1/apps");
+      if (opts.json) return printJson(apps);
+      console.log(
+        table(
+          apps.map((a) => ({
+            id: a.id,
+            name: a.manifest.name,
+            image: `${a.manifest.image}:${a.manifest.version}`,
+            state: a.state,
+            node: a.assignedNodeId ?? "-",
+          })),
+        ),
+      );
+    }),
+  );
+
+program
+  .command("app <id>")
+  .description("Show details for one app deployment")
+  .action((id) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.get(`/api/v1/apps/${encodeURIComponent(id)}`));
+    }),
+  );
+
+program
+  .command("remove <id>")
+  .description("Remove (stop) an app deployment")
+  .action((id) =>
+    run(async () => {
+      const api = await client();
+      const deployment = await api.delete<AppDeploymentSummary>(`/api/v1/apps/${encodeURIComponent(id)}`);
+      console.log(`app ${deployment.id} — ${deployment.state}`);
+    }),
+  );
+
+// --- Commands whose backing subsystems land in later phases (Update, Hardware Daemon, Backup). ---
 // Registered now so the CLI's shape is stable; each clearly reports what it needs once invoked.
 for (const [name, needs] of [
-  ["deploy", "Orca Deploy (Phase 13)"],
   ["update", "Orca Update (Phase 16)"],
   ["power", "Orca Hardware Daemon (Phase 15)"],
   ["backup", "Orca Backup (Phase 17)"],

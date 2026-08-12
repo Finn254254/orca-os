@@ -14,19 +14,26 @@ orca metrics <id>
 orca services <id>
 orca version
 orca logout
+
+orca run <command...>            # submit a compute job, wait for it, print the result
+orca jobs / orca job <id>
+orca models / orca model-pull <runtime> <name>
+
+orca deploy <manifest.json>      # deploy an app from a manifest file
+orca apps / orca app <id>
+orca remove <id>                 # stop an app deployment
 ```
 
 `--url`/`--token` flags (or `ORCA_API_URL`/`ORCA_API_TOKEN` env vars)
 override the saved login for one-off/scripted use without `orca login`.
 
 Planned commands whose backing subsystems land in later phases —
-`run` (Compute), `deploy` (Deploy), `update` (Update), `power` (Hardware
-Daemon), `backup` (Backup) — are registered now so the CLI's shape is
-stable, and each clearly reports what it needs when invoked rather than
-silently doing nothing. `models`/`jobs`/`logs` call the corresponding Orca
-API endpoints, which return 404 until the Model Manager/Compute/log
-aggregation subsystems exist (Phases 9-14) — the CLI surfaces that as a
-clear "may not be implemented yet" hint rather than a raw stack trace.
+`update` (Update), `power` (Hardware Daemon), `backup` (Backup) — are
+registered now so the CLI's shape is stable, and each clearly reports what
+it needs when invoked rather than silently doing nothing. `logs` calls the
+corresponding Orca API endpoint, which returns 404 until log aggregation
+exists — the CLI surfaces that as a clear "may not be implemented yet"
+hint rather than a raw stack trace.
 
 ## Running from source
 

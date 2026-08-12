@@ -208,4 +208,77 @@ describe("OrcaAgent", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toMatch(/simulated job failure/);
   });
+
+  it("simulates deploy_app and remove_app on simulated nodes", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_7",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const manifest = {
+      name: "web",
+      version: "1.0",
+      image: "nginx",
+      ports: [],
+      volumes: [],
+      env: {},
+      resources: {},
+      targetCapabilities: [],
+      restartPolicy: "on-failure",
+    };
+
+    const deployResultPromise = waitFor<{ status: string; result?: Record<string, unknown> }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_deploy",
+      nodeId: "node_agent_7",
+      type: "deploy_app",
+      payload: { manifest },
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const deployResult = await deployResultPromise;
+    expect(deployResult.status).toBe("succeeded");
+    expect(deployResult.result?.simulated).toBe(true);
+    expect(deployResult.result?.containerId).toBe("sim-web");
+
+    const removeResultPromise = waitFor<{ status: string; result?: Record<string, unknown> }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_remove",
+      nodeId: "node_agent_7",
+      type: "remove_app",
+      payload: { name: "web" },
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const removeResult = await removeResultPromise;
+    expect(removeResult.status).toBe("succeeded");
+  });
+
+  it("rejects deploy_app with a missing manifest", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_8",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const resultPromise = waitFor<{ status: string; error?: string }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_bad_deploy",
+      nodeId: "node_agent_8",
+      type: "deploy_app",
+      payload: {},
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const result = await resultPromise;
+    expect(result.status).toBe("failed");
+    expect(result.error).toMatch(/manifest/);
+  });
 });

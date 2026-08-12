@@ -4,7 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-12 complete.** Moving into Phase 13 (Orca Deploy).
+**Phases 1-14 complete.** Moving into Phase 15 (Hardware Daemon).
 
 ## Completed
 
@@ -248,9 +248,55 @@ Last updated: 2026-08-11 (autonomous build session).
     endpoint per runtime, not per-node; documented in
     `ai-gateway/README.md`.
 
+- **Phase 13 — Orca Deploy**
+  - `shared`: `AppManifestSchema`/`AppDeploymentSchema` (name, version,
+    image, ports, volumes, env, resources, `targetCapabilities`,
+    `targetNodeId`/`targetGroup`, `restartPolicy`); new `deploy_app`/
+    `remove_app` command types. Agent handles both — real nodes run
+    `docker run -d --name ... --restart ...` / `docker rm -f`; simulated
+    nodes simulate without touching the host, matching the `run_job`
+    pattern.
+  - `@orca/scheduler` generalized: `selectNode` now takes a
+    `SchedulableSpec` (the four fields it actually needs) instead of the
+    Compute-specific `JobSpec`, so both `JobSpec` and `AppManifest`
+    structurally satisfy it — one scheduler serves both subsystems with no
+    package depending on the other's schema.
+  - `@orca/deploy`: `AppStore` + `DeployService` (submit → schedule →
+    dispatch `deploy_app` → poll → record container id; `removeApp`
+    dispatches `remove_app` and marks `stopped`), mounted at
+    `/api/v1/apps`.
+  - CLI: `orca deploy <manifest.json>`, `orca apps`, `orca app <id>`,
+    `orca remove <id>` — all real now (previously placeholders). Dashboard
+    Applications page shows live deployments with a working Remove button.
+  - Tests: 11 (DeployService scheduling/dispatch/completion/removal with a
+    fake ControlPort, router contract) + a real end-to-end test in
+    `api.test.ts` (deploy → run → remove through a real dispatched node)
+    + a real CLI e2e test spawning the actual binary through the full
+    deploy/apps/app/remove lifecycle against live Control+API+Agent
+    processes.
+
+- **Phase 14 — Orca Storage**
+  - `@orca/storage`: device discovery needed **no new agent work** — Orca
+    Agent already reports each node's disks in heartbeat metrics, so
+    `StorageService.listDevices()` just aggregates what's already flowing
+    through Control. `GET /api/v1/storage/capacity` sums that
+    cluster-wide. Device health is a simple usage-threshold heuristic
+    (documented limitation — no SMART data until Hardware Daemon exists).
+  - Storage pools (named node groupings) and named locations
+    (`model`/`dataset`/`app-data`/`backup` → node + path) are Storage's
+    own small registry — `GET/POST /pools`, `GET/POST /locations`
+    (filterable), `DELETE` for both.
+  - Explicitly out of scope (documented): pooling raw capacity across
+    nodes into one distributed filesystem — this phase tracks/labels where
+    things live today, per the build instructions' guidance not to build
+    a new distributed filesystem prematurely.
+  - Dashboard Storage page shows live capacity + per-device health.
+  - Tests: 11 (device aggregation, health thresholds, capacity math, pools
+    and locations CRUD, router contract).
+
 ## Partially completed / next up
 
-- Phases 13-24: not started (see `orca-platform/README.md` for the full
+- Phases 15-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -268,9 +314,9 @@ as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (8), `compute` (11), `scheduler` (10), `models`
-(21), `ai-gateway` (9), `api` (12), `cli` (7), `dashboard` (9),
-`tests` e2e (5) = 115/115.
+`control` (6), `agent` (10), `compute` (11), `scheduler` (10), `models`
+(21), `ai-gateway` (9), `deploy` (11), `storage` (11), `api` (13),
+`cli` (7), `dashboard` (9), `tests` e2e (6) = 141/141.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -316,9 +362,10 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca AI Gateway (Phase 12): unified inference API, OpenAI-compatible
-   where practical, routing chat/completion requests to a model via
-   `@orca/models` + `@orca/scheduler`.
-2. Orca Deploy (Phase 13): application manifest format, container-based
-   execution, `orca deploy`/`apps`/`app`/`remove`.
-3. Orca Storage (Phase 14): device/pool discovery, capacity/health.
+1. Orca Hardware Daemon (Phase 15): simulated (later real) board-management
+   hardware — temperature/fans/power/LEDs/buttons/watchdogs.
+2. Orca Update (Phase 16): cluster-wide version tracking/rollout, behind a
+   pluggable installer interface (the actual OS install mechanism is
+   Orca OS's, see `docs/OS_INTEGRATION.md`).
+3. Orca Backup (Phase 17): backup jobs, config backups, restore metadata.
+4. Security improvements (Phase 18): TLS on the mesh, per-node identity.

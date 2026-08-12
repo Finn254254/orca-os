@@ -1,4 +1,17 @@
-import type { JobSpec, NodeRecord } from "@orca/shared";
+import type { JobResourceRequest, NodeRecord } from "@orca/shared";
+
+/**
+ * The fields the scheduler actually needs. `JobSpec` (compute jobs) and
+ * `AppManifest` (Orca Deploy) both structurally satisfy this, so the same
+ * scheduler serves both without either package depending on the other's
+ * schema.
+ */
+export interface SchedulableSpec {
+  targetNodeId?: string;
+  targetGroup?: string;
+  requiredCapabilities: string[];
+  resources: JobResourceRequest;
+}
 
 export interface SchedulingDecision {
   nodeId: string;
@@ -21,7 +34,7 @@ export type SchedulingResult = { ok: true; decision: SchedulingDecision } | { ok
  * Kubernetes-style scheduler — a small, explainable scoring function that's
  * easy to extend as real workload needs emerge.
  */
-export function selectNode(nodes: NodeRecord[], spec: JobSpec): SchedulingResult {
+export function selectNode(nodes: NodeRecord[], spec: SchedulableSpec): SchedulingResult {
   const rejected: { nodeId: string; reason: string }[] = [];
   const candidates: { node: NodeRecord; score: number; reasons: string[] }[] = [];
 
@@ -57,7 +70,7 @@ export function selectNode(nodes: NodeRecord[], spec: JobSpec): SchedulingResult
   };
 }
 
-function whyIneligible(node: NodeRecord, spec: JobSpec): string | undefined {
+function whyIneligible(node: NodeRecord, spec: SchedulableSpec): string | undefined {
   if (spec.targetNodeId && node.id !== spec.targetNodeId) return "not the pinned target node";
   if (spec.targetGroup && node.group !== spec.targetGroup) return `not in target group "${spec.targetGroup}"`;
   if (node.status !== "online") return `status is "${node.status}", not online`;

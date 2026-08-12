@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { CommandRecord, CommandStatus } from "@orca/shared";
+import type { AppManifest, CommandRecord, CommandStatus } from "@orca/shared";
 import type { AgentConfig } from "./config.js";
 
 const execFileAsync = promisify(execFile);
@@ -31,6 +31,12 @@ export async function executeCommand(command: CommandRecord, config: AgentConfig
 
     case "run_job":
       return runJob(command.payload, config);
+
+    case "deploy_app":
+      return deployApp(command.payload, config);
+
+    case "remove_app":
+      return removeApp(command.payload, config);
 
     default:
       return { status: "failed", error: `unknown command type: ${command.type satisfies never}` };
@@ -113,6 +119,60 @@ async function runJob(payload: Record<string, unknown>, config: AgentConfig): Pr
     const timeout = typeof payload.timeoutMs === "number" ? payload.timeoutMs : 5 * 60_000;
     const { stdout, stderr } = await execFileAsync(file, rest, { timeout, maxBuffer: 8 * 1024 * 1024 });
     return { status: "succeeded", result: { stdout, stderr, exitCode: 0 } };
+  } catch (err) {
+    return { status: "failed", error: describeError(err) };
+  }
+}
+
+const DOCKER_RESTART_POLICY = { always: "always", "on-failure": "on-failure", never: "no" } as const;
+
+function dockerArgsFor(manifest: AppManifest): string[] {
+  const args = ["run", "-d", "--name", manifest.name, "--restart", DOCKER_RESTART_POLICY[manifest.restartPolicy]];
+  for (const port of manifest.ports) {
+    args.push("-p", `${port.hostPort ?? port.containerPort}:${port.containerPort}/${port.protocol}`);
+  }
+  for (const volume of manifest.volumes) {
+    args.push("-v", `${volume.hostPath}:${volume.containerPath}${volume.readOnly ? ":ro" : ""}`);
+  }
+  for (const [key, value] of Object.entries(manifest.env)) {
+    args.push("-e", `${key}=${value}`);
+  }
+  args.push(`${manifest.image}:${manifest.version}`);
+  return args;
+}
+
+async function deployApp(payload: Record<string, unknown>, config: AgentConfig): Promise<CommandOutcome> {
+  const manifest = payload.manifest as AppManifest | undefined;
+  if (!manifest?.name || !manifest.image) {
+    return { status: "failed", error: "payload.manifest with at least name and image is required" };
+  }
+
+  if (config.simulated) {
+    await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 800));
+    return { status: "succeeded", result: { simulated: true, containerId: `sim-${manifest.name}` } };
+  }
+  if (!config.allowComputeJobs) {
+    return { status: "failed", error: "app deployment is disabled on this agent (set ORCA_ALLOW_COMPUTE_JOBS=0 was set, or unset it to re-enable)" };
+  }
+  try {
+    const { stdout } = await execFileAsync("docker", dockerArgsFor(manifest), { timeout: 120_000 });
+    return { status: "succeeded", result: { containerId: stdout.trim() } };
+  } catch (err) {
+    return { status: "failed", error: describeError(err) };
+  }
+}
+
+async function removeApp(payload: Record<string, unknown>, config: AgentConfig): Promise<CommandOutcome> {
+  const name = payload.name;
+  if (typeof name !== "string" || !name) {
+    return { status: "failed", error: "payload.name (string) is required" };
+  }
+  if (config.simulated) {
+    return { status: "succeeded", result: { simulated: true } };
+  }
+  try {
+    await execFileAsync("docker", ["rm", "-f", name], { timeout: 30_000 });
+    return { status: "succeeded", result: { removed: name } };
   } catch (err) {
     return { status: "failed", error: describeError(err) };
   }
