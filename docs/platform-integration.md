@@ -19,6 +19,7 @@ The host agent owns the local node record. The local read-only API binds only to
 - `GET /healthz` returns API health.
 - `GET /v1/node` returns the live node record.
 - `GET /v1/peers` returns the locally enrolled peer records.
+- `GET /v1/status` returns agent state, local node ID, and enrolled-peer count.
 
 Platform services may read these endpoints locally. They must not expose them remotely or alter the OS state directory directly. Remote access, authentication, node discovery, scheduling, and user-facing APIs belong to the platform layer.
 

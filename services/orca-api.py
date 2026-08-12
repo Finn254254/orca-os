@@ -20,28 +20,49 @@ class OrcaHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def node_record(self) -> dict | None:
+        try:
+            payload = json.loads((self.runtime_dir / "node.json").read_text())
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def peers(self) -> list[dict]:
+        peers = []
+        for peer_file in sorted((self.state_dir / "peers").glob("*.json")):
+            try:
+                peer = json.loads(peer_file.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(peer, dict):
+                peers.append(peer)
+        return peers
+
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/healthz":
             self.send_json(HTTPStatus.OK, {"status": "ok"})
             return
         if self.path == "/v1/node":
-            try:
-                payload = json.loads((self.runtime_dir / "node.json").read_text())
-            except (FileNotFoundError, json.JSONDecodeError):
+            payload = self.node_record()
+            if payload is None:
                 self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"agent": "inactive"})
                 return
             self.send_json(HTTPStatus.OK, payload)
             return
         if self.path == "/v1/peers":
-            peers = []
-            for peer_file in sorted((self.state_dir / "peers").glob("*.json")):
-                try:
-                    peer = json.loads(peer_file.read_text())
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if isinstance(peer, dict):
-                    peers.append(peer)
-            self.send_json(HTTPStatus.OK, {"schemaVersion": 1, "peers": peers})
+            self.send_json(HTTPStatus.OK, {"schemaVersion": 1, "peers": self.peers()})
+            return
+        if self.path == "/v1/status":
+            node = self.node_record()
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "schemaVersion": 1,
+                    "agent": "active" if node else "inactive",
+                    "nodeId": node.get("nodeId") if node else None,
+                    "peerCount": len(self.peers()),
+                },
+            )
             return
         self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 

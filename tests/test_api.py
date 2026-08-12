@@ -43,6 +43,21 @@ with tempfile.TemporaryDirectory() as temp:
                 "schemaVersion": 1,
                 "peers": [{"nodeId": "peer-a", "endpoint": "10.0.0.2:9876"}],
             }
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/status") as response:
+            assert json.load(response) == {
+                "schemaVersion": 1,
+                "agent": "active",
+                "nodeId": "test-node",
+                "peerCount": 1,
+            }
+        (runtime / "node.json").unlink()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/status") as response:
+            assert json.load(response) == {
+                "schemaVersion": 1,
+                "agent": "inactive",
+                "nodeId": None,
+                "peerCount": 1,
+            }
     finally:
         process.terminate()
         process.wait(timeout=5)

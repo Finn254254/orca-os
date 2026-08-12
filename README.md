@@ -63,7 +63,7 @@ orca node show  Print the structured local node record
 
 Use `orca peer add NODE_ID HOST:PORT` to enroll a node in the persistent local registry. This is the first management path before automatic discovery is added.
 
-The local management API serves `GET /healthz` and `GET /v1/node` on `127.0.0.1:9876`. It is intentionally local-only until authenticated remote node management is implemented.
+The local management API serves `GET /healthz`, `GET /v1/node`, `GET /v1/peers`, and `GET /v1/status` on `127.0.0.1:9876`. It is intentionally local-only until authenticated remote node management is implemented.
 
 ## Roadmap
 
