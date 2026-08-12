@@ -4,7 +4,7 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-21 complete.** Moving into Phase 22 (full integration tests).
+**Phases 1-22 complete.** Moving into Phase 23 (documentation pass).
 
 ## Completed
 
@@ -578,9 +578,38 @@ Last updated: 2026-08-12 (autonomous build session).
     real second user receiving and reading a broadcast, a viewer
     correctly forbidden from sending one, device register/list/delete).
 
+- **Phase 22 — Full integration tests**
+  - `tests/e2e/full-platform.test.ts`: every prior phase already has its
+    own focused e2e test (Control+Agent, CLI, Dashboard, dev-cluster,
+    Orca AI, Orca Studio); what none of them exercise is *all of it
+    together in one continuous session* — which is what this test adds.
+    Spins up real Control + one real simulated Agent + real API (against
+    a fake Ollama/OpenAI-shaped upstream, same pattern as the AI/Studio
+    e2e tests) and, through the real HTTP API only:
+    1. hits `/app/discover` before logging in,
+    2. logs in and watches the real agent register and come online,
+    3. confirms `/app/summary` reflects that real node once it's reported
+       metrics,
+    4. pulls a model and confirms it's visible via `/ai/models`,
+    5. submits a compute job and watches it succeed on the real node,
+    6. deploys an app and watches it reach `running` on the same node,
+    7. creates an Orca AI conversation and sends a message, confirming
+       the streamed reply persisted correctly,
+    8. creates an Orca Studio agent config against that same model and
+       runs it through the testing console,
+    9. registers a device and sends an App Backend broadcast
+       notification, confirming it's visible,
+    10. runs a real cluster-config backup,
+    11. confirms `GET /audit` recorded every one of the mutating calls
+        above (Auth/Models/Compute/Deploy/AI/Studio/App
+        Backend/Backup — proving the global audit middleware really is
+        subsystem-agnostic, not just tested per-subsystem in isolation).
+  - Verified stable across repeated runs (no flakiness from the
+    poll-based waits) before being added to the suite.
+
 ## Partially completed / next up
 
-- Phases 22-24: not started (see `orca-platform/README.md` for the full
+- Phases 23-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
 
 ## Tests
@@ -597,7 +626,7 @@ All tests currently green: `shared` (7), `mesh` (4), `security` (10),
 (21), `ai-gateway` (16), `deploy` (11), `storage` (11),
 `hardware-daemon` (16), `update` (18), `backup` (13), `api` (34),
 `cli` (7), `app-backend` (12), `dashboard` (9), `ai` (17), `studio` (9),
-`tests` e2e (9) = 269/269.
+`tests` e2e (10) = 270/270.
 
 Note: `dashboard/`, `ai/`, and `studio/` are intentionally **not** in the
 root `tsconfig.json` `tsc -b` graph — they're Vite/browser apps with
@@ -675,8 +704,6 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Full integration tests (Phase 22): cross-subsystem scenarios beyond
-   what each package's own e2e test already covers.
-2. Documentation pass (Phase 23): review every README/doc for accuracy
-   against the final Phase 1-21 state.
-3. Platform-wide testing, fixes, and cleanup (Phase 24).
+1. Documentation pass (Phase 23): review every README/doc for accuracy
+   against the final Phase 1-22 state.
+2. Platform-wide testing, fixes, and cleanup (Phase 24).
