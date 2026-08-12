@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -11,6 +12,8 @@ from pathlib import Path
 class OrcaHandler(BaseHTTPRequestHandler):
     runtime_dir: Path
     state_dir: Path
+    node_id_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    endpoint_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.:-]{0,255}$")
 
     def send_json(self, status: HTTPStatus, payload: dict) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
@@ -34,7 +37,14 @@ class OrcaHandler(BaseHTTPRequestHandler):
                 peer = json.loads(peer_file.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            if isinstance(peer, dict):
+            if (
+                isinstance(peer, dict)
+                and peer.get("schemaVersion") == 1
+                and isinstance(peer.get("nodeId"), str)
+                and isinstance(peer.get("endpoint"), str)
+                and self.node_id_pattern.fullmatch(peer["nodeId"])
+                and self.endpoint_pattern.fullmatch(peer["endpoint"])
+            ):
                 peers.append(peer)
         return peers
 

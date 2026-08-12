@@ -17,8 +17,10 @@ with tempfile.TemporaryDirectory() as temp:
     runtime.mkdir()
     (state / "peers").mkdir(parents=True)
     (runtime / "node.json").write_text('{"nodeId":"test-node","agent":"active"}')
-    (state / "peers" / "peer-a.json").write_text('{"nodeId":"peer-a","endpoint":"10.0.0.2:9876"}')
+    (state / "peers" / "peer-a.json").write_text('{"schemaVersion":1,"nodeId":"peer-a","endpoint":"10.0.0.2:9876"}')
     (state / "peers" / "bad.json").write_text('{not json}')
+    (state / "peers" / "bad-shape.json").write_text('{"nodeId":"bad/node","endpoint":"https://wrong"}')
+    (state / "peers" / "old-schema.json").write_text('{"nodeId":"old-peer","endpoint":"10.0.0.8:9876"}')
     port = 19876
     process = subprocess.Popen(
         [
@@ -41,7 +43,7 @@ with tempfile.TemporaryDirectory() as temp:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/peers") as response:
             assert json.load(response) == {
                 "schemaVersion": 1,
-                "peers": [{"nodeId": "peer-a", "endpoint": "10.0.0.2:9876"}],
+                "peers": [{"schemaVersion": 1, "nodeId": "peer-a", "endpoint": "10.0.0.2:9876"}],
             }
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/status") as response:
             assert json.load(response) == {

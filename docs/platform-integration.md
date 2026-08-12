@@ -27,6 +27,8 @@ The OS services run with systemd filesystem, device, kernel, privilege, and capa
 
 The `/v1/node` record is written atomically and includes `schemaVersion`, `nodeId`, `hostname`, `architecture`, `kernel`, `agent`, `pid`, `resources.cpuCores`, `resources.memoryMiB`, and `updated`. Consumers must ignore unknown fields.
 
+Peer records returned by `/v1/peers` must use schema version 1 and contain a valid node ID and `HOST:PORT`-style endpoint. Invalid or unrecognised records are ignored.
+
 ## CLI data contract
 
 Platform installers and diagnostics may run `orca info --json` to read OS identity and hardware information. The result includes `schemaVersion`, `name`, `version`, `hostname`, `architecture`, `kernel`, `cpu`, `memoryMiB`, and `virtualization`. Consumers must ignore unknown fields so this schema can grow additively.
