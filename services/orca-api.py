@@ -10,6 +10,7 @@ from pathlib import Path
 
 class OrcaHandler(BaseHTTPRequestHandler):
     runtime_dir: Path
+    state_dir: Path
 
     def send_json(self, status: HTTPStatus, payload: dict) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
@@ -31,6 +32,17 @@ class OrcaHandler(BaseHTTPRequestHandler):
                 return
             self.send_json(HTTPStatus.OK, payload)
             return
+        if self.path == "/v1/peers":
+            peers = []
+            for peer_file in sorted((self.state_dir / "peers").glob("*.json")):
+                try:
+                    peer = json.loads(peer_file.read_text())
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if isinstance(peer, dict):
+                    peers.append(peer)
+            self.send_json(HTTPStatus.OK, {"schemaVersion": 1, "peers": peers})
+            return
         self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def log_message(self, _format: str, *_args: object) -> None:
@@ -40,10 +52,12 @@ class OrcaHandler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Orca local management API")
     parser.add_argument("--runtime-dir", default="/run/orca")
+    parser.add_argument("--state-dir", default="/var/lib/orca")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=9876, type=int)
     args = parser.parse_args()
     OrcaHandler.runtime_dir = Path(args.runtime_dir)
+    OrcaHandler.state_dir = Path(args.state_dir)
     ThreadingHTTPServer((args.host, args.port), OrcaHandler).serve_forever()
 
 
