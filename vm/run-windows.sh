@@ -12,6 +12,13 @@ api_port="${ORCA_VM_API_PORT:-9876}"
 mac="${ORCA_VM_MAC:-02:4f:52:43:41:00}"
 pid_file="${ORCA_VM_PID_FILE:-}"
 overlay="${ORCA_VM_OVERLAY:-$project_root/out/orca-vm.qcow2}"
+dry_run=0
+
+case "${1:-}" in
+  "") ;;
+  --dry-run) dry_run=1 ;;
+  *) echo "Usage: run-windows.sh [--dry-run]" >&2; exit 2 ;;
+esac
 
 fail() {
   echo "$*" >&2
@@ -21,9 +28,21 @@ fail() {
 to_wsl_path() {
   local path="$1"
   if [[ "$path" =~ ^[A-Za-z]:[\\/] ]]; then
+    command -v wslpath >/dev/null || fail "A Windows path requires WSL path conversion."
     wslpath -u "$path"
   else
     printf '%s\n' "$path"
+  fi
+}
+
+to_windows_path() {
+  local path="$1"
+  if command -v wslpath >/dev/null; then
+    wslpath -w "$path"
+  elif ((dry_run)); then
+    printf '%s\n' "$path"
+  else
+    fail "run-windows.sh must be run from WSL."
   fi
 }
 
@@ -61,7 +80,7 @@ first_octet=$((16#$first_octet))
   fail "VM MAC must be a locally administered unicast address."
 
 [[ -f "$image" ]] || fail "Image not found: $image. Run 'make image' first."
-command -v wslpath >/dev/null || fail "run-windows.sh must be run from WSL."
+((dry_run)) || command -v wslpath >/dev/null || fail "run-windows.sh must be run from WSL."
 
 qemu="$(find_windows_qemu || true)"
 [[ -n "$qemu" && -f "$qemu" ]] || fail \
@@ -74,24 +93,19 @@ ovmf_vars="$(to_wsl_path "${ORCA_OVMF_VARS:-$qemu_root/share/qemu/edk2-i386-vars
 [[ -f "$ovmf_code" ]] || fail "UEFI code firmware not found: $ovmf_code"
 [[ -f "$ovmf_vars" ]] || fail "UEFI variable template not found: $ovmf_vars"
 
-if [[ ! -f "$vars_copy" ]]; then
-  mkdir -p "$(dirname "$vars_copy")"
-  cp "$ovmf_vars" "$vars_copy"
-fi
-
-image_windows="$(wslpath -w "$image")"
+image_windows="$(to_windows_path "$image")"
 disk_windows="$image_windows"
 disk_format="raw"
 if [[ "$overlay" != "none" ]]; then
-  disk_windows="$(wslpath -w "$overlay")"
+  disk_windows="$(to_windows_path "$overlay")"
   disk_format="qcow2"
 fi
-code_windows="$(wslpath -w "$ovmf_code")"
-vars_windows="$(wslpath -w "$vars_copy")"
+code_windows="$(to_windows_path "$ovmf_code")"
+vars_windows="$(to_windows_path "$vars_copy")"
 if [[ "$serial" == file:* ]]; then
   serial_file="${serial#file:}"
-  mkdir -p "$(dirname "$serial_file")"
-  serial="file:$(wslpath -w "$serial_file")"
+  ((dry_run)) || mkdir -p "$(dirname "$serial_file")"
+  serial="file:$(to_windows_path "$serial_file")"
 fi
 nic="user,model=virtio-net-pci,mac=$mac,hostfwd=tcp:127.0.0.1:${ssh_port}-:22,hostfwd=tcp:127.0.0.1:${api_port}-:9876"
 
@@ -108,18 +122,23 @@ qemu_args=(
 )
 
 if [[ -n "$pid_file" ]]; then
-  mkdir -p "$(dirname "$pid_file")"
-  qemu_args+=( -pidfile "$(wslpath -w "$pid_file")" )
+  ((dry_run)) || mkdir -p "$(dirname "$pid_file")"
+  qemu_args+=( -pidfile "$(to_windows_path "$pid_file")" )
 fi
 
 if [[ "${ORCA_VM_HEADLESS:-0}" == "1" ]]; then
   qemu_args+=( -display none )
 fi
 
-if [[ "${1:-}" == "--dry-run" ]]; then
+if ((dry_run)); then
   printf '%q ' "$qemu" "${qemu_args[@]}"
   printf '\n'
   exit 0
+fi
+
+if [[ ! -f "$vars_copy" ]]; then
+  mkdir -p "$(dirname "$vars_copy")"
+  cp "$ovmf_vars" "$vars_copy"
 fi
 
 if [[ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
