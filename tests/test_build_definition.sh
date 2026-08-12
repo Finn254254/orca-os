@@ -22,6 +22,11 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$vm_root/bin/qemu-system-x86_64"
 chmod +x "$vm_root/bin/qemu-system-x86_64"
 vm_output="$(PATH="$vm_root/bin:$PATH" ORCA_IMAGE="$vm_root/image.raw" ORCA_OVMF_CODE="$vm_root/OVMF_CODE.fd" ORCA_OVMF_VARS="$vm_root/OVMF_VARS.fd" ORCA_OVMF_VARS_COPY="$vm_root/OVMF_VARS_COPY.fd" "$project_root/vm/run-qemu.sh" --dry-run)"
 grep -q 'if=pflash' <<<"$vm_output"
+grep -q 'hostfwd=tcp:127.0.0.1:9876-:9876' <<<"$vm_output"
+if PATH="$vm_root/bin:$PATH" ORCA_IMAGE="$vm_root/image.raw" ORCA_OVMF_CODE="$vm_root/OVMF_CODE.fd" ORCA_OVMF_VARS="$vm_root/OVMF_VARS.fd" ORCA_VM_API_PORT=70000 "$project_root/vm/run-qemu.sh" --dry-run >/dev/null 2>&1; then
+  echo 'VM launcher accepted an invalid forwarded port' >&2
+  exit 1
+fi
 grep -q 'sudo env "PATH=$PATH"' "$project_root/.github/workflows/build-image.yml"
 
 smoke_root="$(mktemp -d)"
@@ -34,7 +39,24 @@ for argument in "$@"; do
     file:*) printf ORCA_OS_READY > "${argument#file:}" ;;
   esac
 done
-exec tail -f /dev/null
+exec python3 - "$ORCA_VM_API_PORT" <<'PY'
+import http.server
+import sys
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = b'{"status":"ok"}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        pass
+
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+PY
 EOF
 chmod +x "$smoke_root/bin/qemu-system-x86_64"
 PATH="$smoke_root/bin:$PATH" \

@@ -33,6 +33,8 @@ Run the automated headless boot check, which waits for the image's serial readin
 make vm-smoke
 ```
 
+The smoke test also calls the guest management API through QEMU's loopback-only port forwarding, confirming that both the OS and its core services started successfully.
+
 The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 
 ## Repository layout

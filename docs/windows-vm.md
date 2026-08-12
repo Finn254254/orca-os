@@ -17,7 +17,7 @@ qemu-system-x86_64.exe `
   -drive if=pflash,format=raw,readonly=on,file=OVMF_CODE.fd `
   -drive if=pflash,format=raw,file=ORCA_OVMF_VARS.fd `
   -drive file=orca-os-x86_64.raw,format=raw,if=virtio `
-  -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 `
+  -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:9876-:9876 `
   -serial mon:stdio
 ```
 
@@ -38,3 +38,11 @@ From Windows, once SSH is configured in the VM, connect with:
 ```powershell
 ssh -p 2222 root@localhost
 ```
+
+The VM management API is forwarded to Windows on loopback only. Check it from PowerShell with:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:9876/healthz
+```
+
+The response should contain `status: ok`. When using the repository launcher, set `ORCA_VM_SSH_PORT` or `ORCA_VM_API_PORT` to choose different host ports.

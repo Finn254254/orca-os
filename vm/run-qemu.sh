@@ -9,6 +9,8 @@ ovmf_code="${ORCA_OVMF_CODE:-}"
 ovmf_vars="${ORCA_OVMF_VARS:-}"
 ovmf_vars_copy="${ORCA_OVMF_VARS_COPY:-$project_root/out/OVMF_VARS.fd}"
 serial="${ORCA_VM_SERIAL:-mon:stdio}"
+ssh_port="${ORCA_VM_SSH_PORT:-2222}"
+api_port="${ORCA_VM_API_PORT:-9876}"
 
 find_firmware() {
   local candidate
@@ -17,6 +19,13 @@ find_firmware() {
   done
   return 1
 }
+
+for port in "$ssh_port" "$api_port"; do
+  [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || {
+    echo "VM forwarded ports must be between 1 and 65535." >&2
+    exit 2
+  }
+done
 
 [[ -f "$image" ]] || {
   echo "Image not found: $image. Run 'make image' first." >&2
@@ -47,7 +56,7 @@ qemu_args=(
   -drive "if=pflash,format=raw,readonly=on,file=$ovmf_code"
   -drive "if=pflash,format=raw,file=$ovmf_vars_copy"
   -drive "file=$image,format=raw,if=virtio"
-  -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22
+  -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${ssh_port}-:22,hostfwd=tcp:127.0.0.1:${api_port}-:9876"
   -serial "$serial"
 )
 
