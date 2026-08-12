@@ -22,6 +22,8 @@ The host agent owns the local node record. The local read-only API binds only to
 
 Platform services may read these endpoints locally. They must not expose them remotely or alter the OS state directory directly. Remote access, authentication, node discovery, scheduling, and user-facing APIs belong to the platform layer.
 
+The OS services run with systemd filesystem, device, kernel, privilege, and capability restrictions. The local API is additionally limited to IP socket families and remains bound to loopback.
+
 The `/v1/node` record is written atomically and includes `schemaVersion`, `nodeId`, `hostname`, `architecture`, `kernel`, `agent`, `pid`, `resources.cpuCores`, `resources.memoryMiB`, and `updated`. Consumers must ignore unknown fields.
 
 ## CLI data contract

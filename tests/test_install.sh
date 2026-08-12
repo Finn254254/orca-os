@@ -7,6 +7,13 @@ trap 'rm -rf "$rootfs"' EXIT
 
 "$project_root/tools/install-rootfs.sh" "$rootfs"
 "$project_root/tools/verify-rootfs.sh" "$rootfs"
+cp "$rootfs/usr/lib/systemd/system/orca-api.service" "$rootfs/orca-api.service.valid"
+sed '/^CapabilityBoundingSet=$/d' "$rootfs/orca-api.service.valid" > "$rootfs/usr/lib/systemd/system/orca-api.service"
+if "$project_root/tools/verify-rootfs.sh" "$rootfs" >/dev/null 2>&1; then
+  echo 'rootfs verifier accepted an unhardened API service' >&2
+  exit 1
+fi
+mv "$rootfs/orca-api.service.valid" "$rootfs/usr/lib/systemd/system/orca-api.service"
 cp "$rootfs/etc/os-release" "$rootfs/etc/os-release.valid"
 sed 's/^ID=orca$/ID=debian/' "$rootfs/etc/os-release.valid" > "$rootfs/etc/os-release"
 if "$project_root/tools/verify-rootfs.sh" "$rootfs" >/dev/null 2>&1; then

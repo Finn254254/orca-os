@@ -49,6 +49,27 @@ for unit in orca-agent orca-api orca-ready; do
   }
 done
 
+for unit in orca-agent orca-api; do
+  unit_file="$rootfs/usr/lib/systemd/system/$unit.service"
+  for directive in \
+    'NoNewPrivileges=true' \
+    'PrivateDevices=true' \
+    'ProtectSystem=strict' \
+    'ProtectKernelModules=true' \
+    'RestrictSUIDSGID=true' \
+    'CapabilityBoundingSet='; do
+    grep -Fxq "$directive" "$unit_file" || {
+      echo "Required service hardening is missing from $unit: $directive" >&2
+      exit 1
+    }
+  done
+done
+
+grep -Fxq 'RestrictAddressFamilies=AF_INET AF_INET6' "$rootfs/usr/lib/systemd/system/orca-api.service" || {
+  echo "Orca API socket families are not restricted." >&2
+  exit 1
+}
+
 grep -q 'ORCA_OS_READY' "$rootfs/usr/lib/systemd/system/orca-ready.service" || {
   echo "Boot readiness marker is not configured." >&2
   exit 1
