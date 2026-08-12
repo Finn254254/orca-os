@@ -25,11 +25,25 @@ in development. For a production build served separately from the API, set
   Agent.
 - **Settings** — cluster config (read-only view) and user management
   (admin only): list/create/delete users.
-- **Compute / Models / Jobs / Storage / Applications / Logs** — clearly
-  labeled "coming in Phase N" placeholders. These are not backed by mock
-  data; they say plainly that the subsystem doesn't exist yet, and will
-  become real pages once Compute/Model Manager/Deploy/Storage/log
-  aggregation are built (Phases 9-14).
+- **Jobs** (`/compute` and `/jobs`) — real, live-refreshing compute job
+  list via `@orca/compute` (state, assigned node, scheduling/failure
+  reason). Read-only: submit a job via `orca run` (CLI) or
+  `POST /api/v1/jobs`.
+- **Models** — real Model Manager registry via `@orca/models` (runtime,
+  state, download progress). Read-only: pull a model via
+  `orca model-pull` (CLI) or `POST /api/v1/models/pull`.
+- **Storage** — real device/pool/capacity data via `@orca/storage`.
+  Read-only.
+- **Applications** — real app deployments via `@orca/deploy`, including a
+  working **Remove** button (`DELETE /api/v1/apps/:id`). Deploying a new
+  app is CLI/API-only for now: `orca deploy <manifest.json>` or
+  `POST /api/v1/apps`.
+- **Logs** — the one remaining "coming soon" placeholder. Not backed by
+  mock data; says plainly the subsystem doesn't exist yet. No dedicated
+  log-aggregation service was built this project (out of the original
+  phase plan's scope as things stood) — revisit if a use case needs
+  centralized logs beyond what audit events and per-job logs
+  already provide.
 
 Everything above "coming soon" is wired to real Orca API data — nothing is
 a static mock. Verified in an actual headless-browser end-to-end test

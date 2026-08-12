@@ -29,9 +29,23 @@ platform today, and what's explicitly deferred.
 ## Authorization
 
 Role-based access control at the Orca API layer (`requireRole` middleware,
-per-route): `admin`/`operator` for mutating actions (commands, jobs,
-deployments, models, rollouts, backups, cluster config), any authenticated
-role for reads, `admin`-only for user management and the audit log.
+per-route): `admin`/`operator` for mutating actions on **cluster-wide**
+resources (commands, jobs, deployments, models, rollouts, backups,
+cluster config), any authenticated role for reads, `admin`-only for user
+management and the audit log.
+
+**Per-user resources are the exception**: Orca AI's conversations and
+Orca Studio's agent configs/workflows/runs are mounted behind
+`requireAuth` only, with **no role restriction**, because every mutation
+is scoped to the caller's own `userId` (ownership-checked in the
+route/service, 404 rather than 403 for another user's resource — doesn't
+leak existence) rather than affecting shared cluster state. App Backend
+follows the same split within one router: `GET /app/discover` is the one
+fully public route (a client needs it before it has a session token);
+`/app/summary`, `/app/notifications` (read/mark-read), and `/app/devices`
+require auth only (per-user); sending a notification
+(`POST /app/notifications`) is `admin`/`operator`-gated since it can
+broadcast to every user.
 
 ## Secrets
 

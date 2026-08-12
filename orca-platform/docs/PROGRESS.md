@@ -4,7 +4,7 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-22 complete.** Moving into Phase 23 (documentation pass).
+**Phases 1-23 complete.** Moving into Phase 24 (platform-wide cleanup).
 
 ## Completed
 
@@ -607,9 +607,56 @@ Last updated: 2026-08-12 (autonomous build session).
   - Verified stable across repeated runs (no flakiness from the
     poll-based waits) before being added to the suite.
 
+- **Phase 23 — Documentation pass**
+  - `docs/ARCHITECTURE.md`: the "process topology" section still
+    described the Phase 8 state (4 processes, "in progress" on
+    Compute/Scheduler/etc.) — rewritten for the final Phase 22 topology
+    (6 backend processes + 3 frontend SPAs, everything Orca API mounts,
+    the Orca AI/Studio-backend-lives-in-`api/` decision explained). Mesh
+    section's TLS note reworded — it referenced "deferred to the
+    Security phase (Phase 18)" as future tense after that phase had
+    already shipped without TLS, which read as a stale promise rather
+    than an accurate limitation.
+  - `dashboard/README.md`: the Pages section still described Jobs/
+    Models/Storage/Applications/Logs as a block of "coming in Phase N"
+    placeholders — stale since Phases 9-14 built them. Rewrote per-page,
+    and corrected an overstatement caught while fixing it: Jobs/Models/
+    Storage are real but **read-only** monitoring views (submitting a
+    job or pulling a model is CLI/API-only), only Applications has a
+    working mutating action (Remove) in the UI today. Logs remains the
+    one real "coming soon" placeholder — no log-aggregation subsystem
+    was built.
+  - `docs/SECURITY.md`: the Authorization section only described the
+    cluster-wide admin/operator RBAC pattern; added the per-user-resource
+    exception (Orca AI conversations, Orca Studio, App Backend) and why
+    it's deliberately different (ownership-checked per resource, not
+    role-gated, except App Backend's broadcast-capable notification send).
+  - `docs/OS_INTEGRATION.md`: added an "App Backend" section — the
+    `/app/discover` endpoint only *verifies* a server address a client
+    already has; real zero-configuration discovery needs Orca OS to
+    advertise an mDNS/Bonjour service, which didn't have a home in this
+    doc before.
+  - `ai-gateway/README.md`: didn't mention `parseSseChunk` (added in
+    Phase 19) at all; documented it plus why the `ai/` frontend keeps its
+    own copy instead of importing this package.
+  - **`docker-compose.yml`/`Dockerfile` were actually broken**, not just
+    under-documented: the Dockerfile's `COPY` list still only had the
+    Phase 8 package set (`shared`/`mesh`/`security`/`control`/`agent`/
+    `api`/`cli`/`dashboard`) — since Phase 9, `api/src/server.ts` imports
+    `@orca/compute`/`@orca/models`/`@orca/ai-gateway`/`@orca/deploy`/
+    `@orca/storage`/`@orca/update`/`@orca/backup`/`@orca/app-backend` as
+    workspace dependencies, none of which were present in the image, so
+    `npm install` (unresolvable workspace deps) or the api process's own
+    startup import would have failed. Fixed by adding every package to
+    the Dockerfile's `COPY` list and adding `ai`/`studio` services to
+    `docker-compose.yml` (mirroring `dashboard`'s pattern, ports
+    5174/5175). Structurally revalidated with `docker compose config`
+    (still not run end-to-end — no Docker daemon in this environment, an
+    existing documented limitation, not a new one).
+
 ## Partially completed / next up
 
-- Phases 23-24: not started (see `orca-platform/README.md` for the full
+- Phase 24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
 
 ## Tests
@@ -667,6 +714,12 @@ Orca AI, and Orca Studio browser tests — not used elsewhere.
   implementation — registering a device's push token doesn't cause
   anything to actually be sent to it; a real push relay (APNs/FCM) would
   need to be built and wired to read from `DeviceStore`.
+- `docker-compose.yml`/`Dockerfile` are kept structurally in sync with
+  every workspace package as of Phase 23 (`docker compose config`
+  validates), but have never actually been run — no Docker daemon is
+  available in this build environment. `npm run dev:cluster` is the path
+  the automated test suite exercises and the one that's actually been
+  verified working.
 - No subsystem auto-generates App Backend notifications from job/deploy/
   update/backup completions — those records don't track a submitting
   user yet (cluster-wide admin/operator actions, not user-attributed),
@@ -704,6 +757,5 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Documentation pass (Phase 23): review every README/doc for accuracy
-   against the final Phase 1-22 state.
-2. Platform-wide testing, fixes, and cleanup (Phase 24).
+1. Platform-wide testing, fixes, and cleanup (Phase 24) — the final
+   phase in the original build plan.

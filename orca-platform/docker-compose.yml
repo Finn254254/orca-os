@@ -1,15 +1,19 @@
-# One-command local Orca cluster: Control + 3 simulated nodes + API + Dashboard.
+# One-command local Orca cluster: Control + 3 simulated nodes + API +
+# Dashboard + Orca AI + Orca Studio.
 #
 #   docker compose up --build
 #
-# Then open http://localhost:5173 and log in with the ORCA_ADMIN_USERNAME /
-# ORCA_ADMIN_PASSWORD below (override via a .env file or exported env vars —
-# these defaults are for local development only, never use them in
-# production). This is an alternative to `npm run dev:cluster`
-# (scripts/dev-cluster.mjs), which does the same thing without Docker.
+# Then open http://localhost:5173 (Dashboard), http://localhost:5174
+# (Orca AI), or http://localhost:5175 (Orca Studio) and log in with the
+# ORCA_ADMIN_USERNAME/ORCA_ADMIN_PASSWORD below (override via a .env file
+# or exported env vars — these defaults are for local development only,
+# never use them in production). This is an alternative to
+# `npm run dev:cluster` (scripts/dev-cluster.mjs), which does the same
+# thing without Docker.
 #
-# NOTE: keep the `control`/`agent`/`api`/`dashboard` package list in
-# Dockerfile's COPY steps in sync as new orca-platform packages are added.
+# NOTE: keep the package list here and in Dockerfile's COPY steps in sync
+# with orca-platform/package.json's `workspaces` array as new packages are
+# added — `api`'s server imports most of them transitively.
 
 x-orca-env: &orca-env
   ORCA_CLUSTER_TOKEN: ${ORCA_CLUSTER_TOKEN:-dev-cluster-token}
@@ -124,6 +128,30 @@ services:
       ORCA_API_PROXY_TARGET: http://api:8080
     ports:
       - "5173:5173"
+
+  ai:
+    image: orca-platform-dev:latest
+    entrypoint: ["npx", "vite", "--host", "0.0.0.0", "--port", "5174"]
+    working_dir: /app/ai
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      ORCA_API_PROXY_TARGET: http://api:8080
+    ports:
+      - "5174:5174"
+
+  studio:
+    image: orca-platform-dev:latest
+    entrypoint: ["npx", "vite", "--host", "0.0.0.0", "--port", "5175"]
+    working_dir: /app/studio
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      ORCA_API_PROXY_TARGET: http://api:8080
+    ports:
+      - "5175:5175"
 
 volumes:
   orca-control-data:

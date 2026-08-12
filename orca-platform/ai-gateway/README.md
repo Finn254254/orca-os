@@ -22,6 +22,19 @@ SSE), so client-side OpenAI SDKs work unmodified against either runtime.
   (`{model, messages, stream?, temperature?, max_tokens?}`) and response.
   Errors use OpenAI's `{error: {message, type}}` envelope.
 
+## Also exported: `parseSseChunk`
+
+A pure function that extracts OpenAI-style SSE `delta.content`/
+`message.content` text from a raw SSE byte chunk, tolerant of partial
+lines split across chunk boundaries (the caller holds the `remainder`
+buffer across calls) and of `[DONE]`/malformed lines. Used by Orca AI's
+conversations route (`api/src/routes/conversations.ts`) to accumulate the
+full assistant reply for persistence while still passing the raw bytes
+through to the client unmodified. The `ai/` frontend keeps its own small
+copy (`ai/src/sseParser.ts`) rather than depending on this package
+directly, since importing it would pull an Express-based entry point into
+a browser bundle — see `docs/PROGRESS.md`'s architecture decisions.
+
 ## Configuration
 
 - `ORCA_OLLAMA_URL` (default `http://localhost:11434`) — shared with
