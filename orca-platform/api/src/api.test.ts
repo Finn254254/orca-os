@@ -228,6 +228,24 @@ describe("orca-api", () => {
     client.stop();
   });
 
+  it("runs a real cluster-config backup against the live cluster config", async () => {
+    await request(apiBaseUrl).put("/api/v1/cluster/config").set("authorization", `Bearer ${adminToken}`).send({ clusterName: "backup-test-cluster" });
+
+    const backupRes = await request(apiBaseUrl).post("/api/v1/backups").set("authorization", `Bearer ${adminToken}`).send({ kind: "cluster-config" });
+    expect(backupRes.status).toBe(202);
+    expect(backupRes.body.state).toBe("succeeded");
+    expect(backupRes.body.location).toBeTruthy();
+
+    const getRes = await request(apiBaseUrl).get(`/api/v1/backups/${backupRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+    expect(getRes.body.state).toBe("succeeded");
+
+    const restoreRes = await request(apiBaseUrl)
+      .post("/api/v1/backups/restores")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ backupJobId: backupRes.body.id, restoredBy: "admin" });
+    expect(restoreRes.status).toBe(201);
+  });
+
   it("rejects job submission from a viewer role but allows reading", async () => {
     await request(apiBaseUrl)
       .post("/api/v1/users")

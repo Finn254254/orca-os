@@ -81,6 +81,25 @@ export function buildOpenApiSpec(): Record<string, unknown> {
           responses: { "202": { description: "Download started" } },
         },
       },
+      "/backups": {
+        get: { summary: "List backup jobs", security: [bearerAuth], responses: { "200": { description: "Jobs" } } },
+        post: { summary: "Run a backup (cluster-config/app-config; admin/operator)", security: [bearerAuth], responses: { "202": { description: "Job" } } },
+      },
+      "/backups/{id}": {
+        get: { summary: "Get a backup job", security: [bearerAuth], responses: { "200": { description: "Job" }, "404": { description: "Not found" } } },
+      },
+      "/backups/schedules/list": {
+        get: { summary: "List backup schedules", security: [bearerAuth], responses: { "200": { description: "Schedules" } } },
+      },
+      "/backups/schedules": {
+        post: { summary: "Create a backup schedule (admin/operator)", security: [bearerAuth], responses: { "201": { description: "Schedule" } } },
+      },
+      "/backups/restores/list": {
+        get: { summary: "List restore records", security: [bearerAuth], responses: { "200": { description: "Restores" } } },
+      },
+      "/backups/restores": {
+        post: { summary: "Record a restore from a succeeded backup (admin/operator)", security: [bearerAuth], responses: { "201": { description: "Restore" } } },
+      },
       "/updates/manifests": {
         get: { summary: "List published update manifests", security: [bearerAuth], responses: { "200": { description: "Manifests" } } },
         post: { summary: "Publish a signed update manifest (admin)", security: [bearerAuth], responses: { "201": { description: "Manifest" } } },

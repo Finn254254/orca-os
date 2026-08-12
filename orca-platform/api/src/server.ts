@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { AiGatewayService, createAiGatewayRouter } from "@orca/ai-gateway";
 import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/compute";
 import { AppStore, DeployService, createAppsRouter, startDeployPoller } from "@orca/deploy";
+import { BackupService, BackupStore, createBackupRouter, startBackupScheduler } from "@orca/backup";
 import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
 import { UserStore } from "@orca/security";
 import { StorageService, StorageStore, createStorageRouter } from "@orca/storage";
@@ -28,6 +29,7 @@ export interface ApiServerHandle {
   jobs: JobService;
   models: ModelService;
   deploy: DeployService;
+  backup: BackupService;
   storage: StorageService;
   update: UpdateService;
   aiGateway: AiGatewayService;
@@ -69,6 +71,17 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   await appStore.init();
   const deploy = new DeployService({ store: appStore, control, logger });
   const stopDeployPoller = startDeployPoller(deploy);
+
+  const backupStore = new BackupStore(join(config.dataDir, "backup"));
+  await backupStore.init();
+  const backup = new BackupService({
+    store: backupStore,
+    backupDir: join(config.dataDir, "backup", "artifacts"),
+    getClusterConfig: () => control.getClusterConfig(),
+    getAppManifest: async (id) => deploy.getDeployment(id)?.manifest,
+    logger,
+  });
+  const stopBackupScheduler = startBackupScheduler(backup);
 
   const storageStore = new StorageStore(join(config.dataDir, "storage"));
   await storageStore.init();
@@ -115,6 +128,11 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     createAppsRouter(deploy, requireRole("admin", "operator")),
   );
   app.use(
+    "/api/v1/backups",
+    requireAuth(config.sessionSecret),
+    createBackupRouter(backup, requireRole("admin", "operator")),
+  );
+  app.use(
     "/api/v1/storage",
     requireAuth(config.sessionSecret),
     createStorageRouter(storage, requireRole("admin", "operator")),
@@ -147,6 +165,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     jobs,
     models,
     deploy,
+    backup,
     storage,
     update,
     aiGateway,
@@ -155,6 +174,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     close: async () => {
       stopJobPoller();
       stopDeployPoller();
+      stopBackupScheduler();
       stopUpdatePoller();
       realtime.close();
       await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));

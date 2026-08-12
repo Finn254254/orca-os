@@ -4,7 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-16 complete.** Moving into Phase 17 (Orca Backup).
+**Phases 1-17 complete.** Moving into Phase 18 (Security improvements).
 
 ## Completed
 
@@ -332,9 +332,28 @@ Last updated: 2026-08-11 (autonomous build session).
     + a real end-to-end test in `api.test.ts` (publish → rollout →
     complete through a real dispatched node).
 
+- **Phase 17 — Orca Backup**
+  - `@orca/backup`: `cluster-config` and `app-config` backups are real —
+    they snapshot live data (Control's cluster config; a deployment's
+    manifest) to a timestamped JSON file. `app-data` is architecture-only
+    (job created, fails with a clear "no snapshot mechanism yet" reason)
+    per the build instructions' own "configuration backups" vs. "data
+    backup **architecture**" distinction.
+  - Interval-based schedules (not full cron — explicit MVP scope, "backup
+    **architecture**" not a cron engine), a background poller runs due
+    ones. Restore is metadata-tracking (`recordRestore`, only accepted for
+    a succeeded backup job) — not an automated restore executor.
+  - Mounted at `/api/v1/backups`. CLI: `orca backup run/list/schedule/
+    restore` — all real, verified manually end-to-end and via a real API
+    integration test (live cluster-config change → backup → restore
+    record).
+  - Tests: 13 (real file writes for cluster-config/app-config, app-data
+    architecture-only failure, restore-requires-succeeded-job, schedule
+    CRUD + due-schedule execution via `pollSchedules`, router contract).
+
 ## Partially completed / next up
 
-- Phases 17-24: not started (see `orca-platform/README.md` for the full
+- Phases 18-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -354,8 +373,8 @@ whole-platform build.
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
 `control` (6), `agent` (12), `compute` (11), `scheduler` (10), `models`
 (21), `ai-gateway` (9), `deploy` (11), `storage` (11),
-`hardware-daemon` (16), `update` (18), `api` (14), `cli` (7),
-`dashboard` (9), `tests` e2e (7) = 179/179.
+`hardware-daemon` (16), `update` (18), `backup` (13), `api` (15),
+`cli` (7), `dashboard` (9), `tests` e2e (7) = 193/193.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -401,7 +420,10 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca Backup (Phase 17): backup jobs, cluster/app config backups,
-   restore metadata, scheduled backup architecture.
-2. Security improvements (Phase 18): TLS on the mesh, per-node identity,
-   audit events.
+1. Security improvements (Phase 18): audit event logging across
+   subsystems (users/nodes/commands/jobs/deployments/rollouts/backups),
+   secrets-handling review. TLS on the mesh (`wss://`) is noted but likely
+   deferred — it needs certificate provisioning/distribution across nodes,
+   which is more naturally an Orca OS/Hardware Daemon concern once
+   physical nodes exist; will assess scope when this phase starts.
+2. Orca AI (Phase 19): user-facing chat app via AI Gateway.

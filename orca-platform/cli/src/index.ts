@@ -425,11 +425,60 @@ update
     }),
   );
 
-// --- Commands whose backing subsystems land in later phases (Hardware Daemon cluster-wide routing, Backup). ---
+const backup = program.command("backup").description("Backup management");
+
+backup
+  .command("run <kind>")
+  .description('Run a backup now: "cluster-config" or "app-config" (needs --target)')
+  .option("--target <id>", "target id (deployment id, for app-config)")
+  .action((kind, opts) =>
+    run(async () => {
+      const api = await client();
+      const job = await api.post<{ id: string; state: string }>("/api/v1/backups", { kind, targetId: opts.target });
+      console.log(`backup ${job.id} — ${job.state}`);
+    }),
+  );
+
+backup
+  .command("list")
+  .description("List backup jobs")
+  .option("--json", "output raw JSON")
+  .action((opts) =>
+    run(async () => {
+      const api = await client();
+      const jobs = await api.get<{ id: string; kind: string; state: string; createdAt: string }[]>("/api/v1/backups");
+      if (opts.json) return printJson(jobs);
+      console.log(table(jobs.map((j) => ({ id: j.id, kind: j.kind, state: j.state, created: new Date(j.createdAt).toLocaleString() }))));
+    }),
+  );
+
+backup
+  .command("schedule <kind> <intervalMs>")
+  .description("Create a recurring backup schedule")
+  .option("--target <id>", "target id (deployment id, for app-config)")
+  .action((kind, intervalMs, opts) =>
+    run(async () => {
+      const api = await client();
+      const schedule = await api.post("/api/v1/backups/schedules", { kind, intervalMs: Number(intervalMs), targetId: opts.target });
+      printJson(schedule);
+    }),
+  );
+
+backup
+  .command("restore <backupId>")
+  .description("Record a restore from a succeeded backup")
+  .requiredOption("--by <who>", "who is performing the restore")
+  .action((backupId, opts) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.post("/api/v1/backups/restores", { backupJobId: backupId, restoredBy: opts.by }));
+    }),
+  );
+
+// --- Commands whose backing subsystems land in later phases (Hardware Daemon cluster-wide routing). ---
 // Registered now so the CLI's shape is stable; each clearly reports what it needs once invoked.
 for (const [name, needs] of [
   ["power", "Orca Hardware Daemon (Phase 15) cluster-wide routing"],
-  ["backup", "Orca Backup (Phase 17)"],
 ] as const) {
   program
     .command(`${name} [args...]`)

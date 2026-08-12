@@ -15,6 +15,7 @@
     { "path": "deploy" },
     { "path": "storage" },
     { "path": "hardware-daemon" },
-    { "path": "update" }
+    { "path": "update" },
+    { "path": "backup" }
   ]
 }

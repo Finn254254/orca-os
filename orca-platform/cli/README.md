@@ -28,15 +28,20 @@ orca update rollout <version> [--group <g>] [--staged <pct>]
 orca update status <rolloutId>
 orca update continue <rolloutId>
 orca update rollback <rolloutId>
+
+orca backup run <kind> [--target <id>]     # kind: cluster-config | app-config
+orca backup list
+orca backup schedule <kind> <intervalMs>
+orca backup restore <backupId> --by <who>
 ```
 
 `--url`/`--token` flags (or `ORCA_API_URL`/`ORCA_API_TOKEN` env vars)
 override the saved login for one-off/scripted use without `orca login`.
 
-Planned commands whose backing subsystems land in later phases —
-`power` (Hardware Daemon cluster-wide routing), `backup` (Backup) — are
-registered now so the CLI's shape is stable, and each clearly reports what
-it needs when invoked rather than silently doing nothing. `logs` calls the
+`power` is registered now (its backing subsystem, Hardware Daemon, exists
+but isn't wired cluster-wide yet — see `hardware-daemon/README.md`) so the
+CLI's shape is stable, and clearly reports what it needs when invoked
+rather than silently doing nothing. `logs` calls the
 corresponding Orca API endpoint, which returns 404 until log aggregation
 exists — the CLI surfaces that as a clear "may not be implemented yet"
 hint rather than a raw stack trace.
