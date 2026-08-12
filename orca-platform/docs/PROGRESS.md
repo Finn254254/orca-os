@@ -4,9 +4,9 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-Phases 1-6 complete (scaffolding, shared libs, mesh, Control, Agent,
-end-to-end wiring, Orca API + security, Orca CLI). Moving into Phase 7
-(Orca Dashboard).
+Phases 1-7 complete (scaffolding, shared libs, mesh, Control, Agent,
+end-to-end wiring, Orca API + security, Orca CLI, Orca Dashboard). Moving
+into Phase 8 (multi-node simulation environment + first demo).
 
 ## Completed
 
@@ -131,9 +131,31 @@ end-to-end wiring, Orca API + security, Orca CLI). Moving into Phase 7
     actual `orca` binary against real Control + API processes: login,
     status, nodes, version, and the "not implemented yet" paths.
 
+- **Phase 7 — Orca Dashboard**
+  - `@orca/dashboard`: React + Vite + TypeScript SPA, no UI framework
+    dependency, plain CSS built from the dataviz skill's validated palette
+    (status colors for online/offline/degraded, sequential-blue meters,
+    light/dark aware). Overview (stat tiles + live node table), Nodes,
+    Node detail (capabilities, live metrics with disk/CPU/RAM meters,
+    services, a working "Send ping" command button), Settings (cluster
+    config view + admin-only user management). Compute/Models/Jobs/Storage/
+    Applications/Logs are clearly-labeled "coming in Phase N" pages, not
+    fake data — consistent with the API not having those resources yet.
+  - Realtime: subscribes to Orca API's `/ws`, folds `node`/`metrics` events
+    into state — no client-side polling.
+  - Auth: login page, stateless token in `localStorage`, route guard
+    redirecting to `/login` when signed out.
+  - Verified in an actual headless-browser end-to-end test
+    (`tests/e2e/dashboard.test.ts`, Playwright via the pre-installed
+    Chromium): logs in, waits for a real simulated Agent process to appear
+    with its real status/CPU%, opens node detail and confirms real
+    capabilities render — not a static mock.
+  - Tests: 9 unit/component (jsdom + Testing Library: session storage,
+    login success/failure, `Meter`/`StatusPill` rendering) + 1 browser e2e.
+
 ## Partially completed / next up
 
-- Phases 7-24: not started (see `orca-platform/README.md` for the full
+- Phases 8-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -151,7 +173,16 @@ as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (6), `api` (6), `cli` (7), `tests` e2e (2) = 44/44.
+`control` (6), `agent` (6), `api` (6), `cli` (7), `dashboard` (9),
+`tests` e2e (3) = 54/54.
+
+Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
+`tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
+and its own `tsc --noEmit` typecheck (`npm run typecheck` in
+`dashboard/`), separate from the NodeNext backend project references.
+`tests/` pulls in `playwright-core` (driving the pre-installed Chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) for the dashboard
+browser test only — not used elsewhere.
 
 ## Known limitations
 
@@ -189,8 +220,7 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca Dashboard (Phase 7): React admin UI over Orca API + `/ws`.
-2. Multi-node simulation environment + first demo (Phase 8): this is the
+1. Multi-node simulation environment + first demo (Phase 8): this is the
    point where `orca-platform/scripts/dev-cluster.mjs` and/or a
    docker-compose file need to actually exist and start Control + 3
    simulated Agents + API + Dashboard with one command.
