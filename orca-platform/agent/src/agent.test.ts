@@ -61,6 +61,7 @@ describe("OrcaAgent", () => {
       heartbeatIntervalMs: 50,
       allowPowerCommands: false,
       allowShellCommands: false,
+      allowComputeJobs: true,
       ...overrides,
     };
   }
@@ -157,5 +158,54 @@ describe("OrcaAgent", () => {
     const result = await resultPromise;
     expect(result.status).toBe("succeeded");
     expect(result.result?.simulated).toBe(true);
+  });
+
+  it("simulates run_job commands on simulated nodes instead of executing on the host", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_5",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const resultPromise = waitFor<{ status: string; result?: Record<string, unknown> }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_job",
+      nodeId: "node_agent_5",
+      type: "run_job",
+      payload: { command: ["echo", "hello"] },
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const result = await resultPromise;
+    expect(result.status).toBe("succeeded");
+    expect(result.result?.simulated).toBe(true);
+    expect(String(result.result?.stdout)).toContain("echo hello");
+  });
+
+  it("fails run_job when payload.forceFail is set (for testing failure paths)", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_6",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const resultPromise = waitFor<{ status: string; error?: string }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_job_fail",
+      nodeId: "node_agent_6",
+      type: "run_job",
+      payload: { command: ["false"], forceFail: true },
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const result = await resultPromise;
+    expect(result.status).toBe("failed");
+    expect(result.error).toMatch(/simulated job failure/);
   });
 });

@@ -108,6 +108,7 @@ export const CommandTypeSchema = z.enum([
   "start_service",
   "shell",
   "power",
+  "run_job",
 ]);
 export type CommandType = z.infer<typeof CommandTypeSchema>;
 

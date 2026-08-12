@@ -128,5 +128,64 @@ describe("orca-api", () => {
     expect(res.status).toBe(200);
     expect(res.body.paths).toBeDefined();
     expect(res.body.paths["/nodes"]).toBeDefined();
+    expect(res.body.paths["/jobs"]).toBeDefined();
+  });
+
+  it("submits, schedules, dispatches, and completes a job end-to-end through a real node", async () => {
+    const client = new MeshClient({ url: controlWsUrl, token: CLUSTER_TOKEN, nodeId: "node_worker", name: "worker-1" });
+    client.on("command", (command) => {
+      if (command.type === "run_job") client.sendCommandResult(command.id, "succeeded", { stdout: "job output\n" });
+    });
+    client.start();
+    await waitFor(client, "ack");
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get("/api/v1/nodes").set("authorization", `Bearer ${adminToken}`);
+      return res.body.some((n: { status: string }) => n.status === "online");
+    });
+
+    const submitRes = await request(apiBaseUrl)
+      .post("/api/v1/jobs")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ type: "shell", command: ["echo", "hi"] });
+    expect(submitRes.status).toBe(202);
+    expect(submitRes.body.assignedNodeId).toBe("node_worker");
+
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get(`/api/v1/jobs/${submitRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+      return res.body.state === "succeeded";
+    }, 5000);
+
+    const finalRes = await request(apiBaseUrl).get(`/api/v1/jobs/${submitRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+    expect(finalRes.body.result.stdout).toBe("job output\n");
+
+    client.stop();
+  });
+
+  it("rejects job submission from a viewer role but allows reading", async () => {
+    await request(apiBaseUrl)
+      .post("/api/v1/users")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ username: "viewer2", password: "pw123456", role: "viewer" });
+    const viewerLogin = await request(apiBaseUrl).post("/api/v1/auth/login").send({ username: "viewer2", password: "pw123456" });
+    const viewerToken = viewerLogin.body.token;
+
+    const forbidden = await request(apiBaseUrl)
+      .post("/api/v1/jobs")
+      .set("authorization", `Bearer ${viewerToken}`)
+      .send({ type: "shell", command: ["echo", "hi"] });
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await request(apiBaseUrl).get("/api/v1/jobs").set("authorization", `Bearer ${viewerToken}`);
+    expect(allowed.status).toBe(200);
+  });
+
+  it("fails a job immediately when no node is eligible", async () => {
+    const res = await request(apiBaseUrl)
+      .post("/api/v1/jobs")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ type: "shell", command: ["echo", "hi"], resources: { gpu: true } });
+    expect(res.status).toBe(202);
+    expect(res.body.state).toBe("failed");
+    expect(res.body.failureReason).toBeTruthy();
   });
 });

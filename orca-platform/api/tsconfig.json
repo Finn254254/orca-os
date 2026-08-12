@@ -8,7 +8,10 @@
     { "path": "../shared" },
     { "path": "../security" },
     { "path": "../mesh" },
-    { "path": "../control" }
+    { "path": "../control" },
+    { "path": "../scheduler" },
+    { "path": "../compute" },
+    { "path": "../models" }
   ],
   "include": ["src"]
 }

@@ -57,6 +57,34 @@ export function buildOpenApiSpec(): Record<string, unknown> {
         get: { summary: "Get cluster config", security: [bearerAuth], responses: { "200": { description: "Config" } } },
         put: { summary: "Update cluster config (admin)", security: [bearerAuth], responses: { "200": { description: "Config" } } },
       },
+      "/models": {
+        get: { summary: "List registered models", security: [bearerAuth], responses: { "200": { description: "Models" } } },
+      },
+      "/models/{id}": {
+        get: { summary: "Get a model", security: [bearerAuth], responses: { "200": { description: "Model" }, "404": { description: "Not found" } } },
+        delete: { summary: "Delete a model (admin/operator)", security: [bearerAuth], responses: { "204": { description: "Deleted" } } },
+      },
+      "/models/pull": {
+        post: {
+          summary: "Pull a model from a runtime (Ollama/llama.cpp) — admin/operator",
+          security: [bearerAuth],
+          responses: { "202": { description: "Download started" } },
+        },
+      },
+      "/jobs": {
+        get: { summary: "List compute jobs", security: [bearerAuth], responses: { "200": { description: "Jobs" } } },
+        post: {
+          summary: "Submit a compute job (admin/operator)",
+          security: [bearerAuth],
+          responses: { "202": { description: "Job accepted (scheduling attempted synchronously)" } },
+        },
+      },
+      "/jobs/{id}": {
+        get: { summary: "Get a job", security: [bearerAuth], responses: { "200": { description: "Job" }, "404": { description: "Not found" } } },
+      },
+      "/jobs/{id}/cancel": {
+        post: { summary: "Cancel a job (admin/operator)", security: [bearerAuth], responses: { "200": { description: "Job" } } },
+      },
       "/cluster/groups": {
         get: { summary: "List node groups", security: [bearerAuth], responses: { "200": { description: "Groups" } } },
         post: { summary: "Create a node group (admin/operator)", security: [bearerAuth], responses: { "201": { description: "Groups" } } },

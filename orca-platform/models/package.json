@@ -1,34 +1,23 @@
 {
-  "name": "@orca/api",
+  "name": "@orca/models",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@orca/shared": "*",
-    "@orca/security": "*",
-    "@orca/compute": "*",
-    "@orca/models": "*",
-    "express": "^5.0.0",
-    "cors": "^2.8.5",
-    "ws": "^8.18.0"
+    "express": "^5.0.0"
   },
   "devDependencies": {
-    "@orca/control": "*",
-    "@orca/mesh": "*",
     "@types/express": "^5.0.0",
-    "@types/cors": "^2.8.17",
-    "@types/ws": "^8.5.13",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",
     "typescript": "^5.7.2",
-    "tsx": "^4.19.2",
     "vitest": "^2.1.8"
   }
 }

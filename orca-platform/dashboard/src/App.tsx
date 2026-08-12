@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { getToken } from "./api.js";
 import { ComingSoon } from "./pages/ComingSoon.js";
+import { Jobs } from "./pages/Jobs.js";
 import { Login } from "./pages/Login.js";
+import { Models } from "./pages/Models.js";
 import { NodeDetail } from "./pages/NodeDetail.js";
 import { Nodes } from "./pages/Nodes.js";
 import { Overview } from "./pages/Overview.js";
@@ -45,7 +47,7 @@ export function App() {
         path="/compute"
         element={
           <RequireAuth>
-            <ComingSoon title="Compute" phase="Phase 9" />
+            <Jobs />
           </RequireAuth>
         }
       />
@@ -53,7 +55,7 @@ export function App() {
         path="/models"
         element={
           <RequireAuth>
-            <ComingSoon title="Models" phase="Phase 11" />
+            <Models />
           </RequireAuth>
         }
       />
@@ -61,7 +63,7 @@ export function App() {
         path="/jobs"
         element={
           <RequireAuth>
-            <ComingSoon title="Jobs" phase="Phase 9" />
+            <Jobs />
           </RequireAuth>
         }
       />

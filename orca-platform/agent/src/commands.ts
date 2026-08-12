@@ -29,6 +29,9 @@ export async function executeCommand(command: CommandRecord, config: AgentConfig
     case "power":
       return runPower(command.payload, config);
 
+    case "run_job":
+      return runJob(command.payload, config);
+
     default:
       return { status: "failed", error: `unknown command type: ${command.type satisfies never}` };
   }
@@ -78,6 +81,38 @@ async function runPower(payload: Record<string, unknown>, config: AgentConfig): 
   try {
     await execFileAsync("systemctl", [action], { timeout: 5000 });
     return { status: "succeeded", result: { action } };
+  } catch (err) {
+    return { status: "failed", error: describeError(err) };
+  }
+}
+
+async function runJob(payload: Record<string, unknown>, config: AgentConfig): Promise<CommandOutcome> {
+  const args = payload.command;
+  if (!Array.isArray(args) || args.length === 0 || !args.every((a) => typeof a === "string")) {
+    return { status: "failed", error: "payload.command must be a non-empty string array" };
+  }
+
+  if (config.simulated) {
+    // Simulated nodes represent fake hardware — never actually exec on the host
+    // running the simulated agent. Simulate plausible timing/output instead.
+    await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 1200));
+    if (payload.forceFail) {
+      return { status: "failed", error: "simulated job failure (payload.forceFail was set)" };
+    }
+    return {
+      status: "succeeded",
+      result: { simulated: true, stdout: `[simulated] ran: ${(args as string[]).join(" ")}`, exitCode: 0 },
+    };
+  }
+
+  if (!config.allowComputeJobs) {
+    return { status: "failed", error: "compute jobs are disabled on this agent (set ORCA_ALLOW_COMPUTE_JOBS=0 was set, or unset it to re-enable)" };
+  }
+  try {
+    const [file, ...rest] = args as string[];
+    const timeout = typeof payload.timeoutMs === "number" ? payload.timeoutMs : 5 * 60_000;
+    const { stdout, stderr } = await execFileAsync(file, rest, { timeout, maxBuffer: 8 * 1024 * 1024 });
+    return { status: "succeeded", result: { stdout, stderr, exitCode: 0 } };
   } catch (err) {
     return { status: "failed", error: describeError(err) };
   }

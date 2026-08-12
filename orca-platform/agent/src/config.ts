@@ -11,6 +11,7 @@ export interface AgentConfig {
   heartbeatIntervalMs: number;
   allowPowerCommands: boolean;
   allowShellCommands: boolean;
+  allowComputeJobs: boolean;
 }
 
 export function loadAgentConfig(): AgentConfig {
@@ -33,5 +34,8 @@ export function loadAgentConfig(): AgentConfig {
     // Default-safe: never execute real power actions or shell commands unless explicitly opted in.
     allowPowerCommands: process.env.ORCA_ALLOW_POWER_COMMANDS === "1" || process.env.ORCA_ALLOW_POWER_COMMANDS === "true",
     allowShellCommands: process.env.ORCA_ALLOW_SHELL_COMMANDS === "1" || process.env.ORCA_ALLOW_SHELL_COMMANDS === "true",
+    // Compute jobs are the platform's core purpose (unlike raw shell access), so default on;
+    // still overridable per node for anyone who wants job execution opt-in instead.
+    allowComputeJobs: process.env.ORCA_ALLOW_COMPUTE_JOBS !== "0" && process.env.ORCA_ALLOW_COMPUTE_JOBS !== "false",
   };
 }

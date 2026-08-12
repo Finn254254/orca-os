@@ -1,10 +1,14 @@
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createServer, type Server } from "node:http";
+import { join } from "node:path";
+import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/compute";
+import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
 import { UserStore } from "@orca/security";
 import { createLogger, type Logger } from "@orca/shared";
 import type { ApiConfig } from "./config.js";
 import { ControlClient, ControlClientError } from "./controlClient.js";
+import { requireAuth, requireRole } from "./middleware/auth.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { createRealtimeHub, type RealtimeHub } from "./realtime.js";
 import { createAuthRouter } from "./routes/auth.js";
@@ -17,6 +21,8 @@ export interface ApiServerHandle {
   httpServer: Server;
   users: UserStore;
   control: ControlClient;
+  jobs: JobService;
+  models: ModelService;
   realtime: RealtimeHub;
   logger: Logger;
   close: () => Promise<void>;
@@ -38,6 +44,19 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
 
   const control = new ControlClient(config.controlUrl);
 
+  const jobStore = new JobStore(join(config.dataDir, "compute"));
+  await jobStore.init();
+  const jobs = new JobService({ store: jobStore, control, logger });
+  const stopJobPoller = startJobPoller(jobs);
+
+  const modelStore = new ModelStore(join(config.dataDir, "models"));
+  await modelStore.init();
+  const models = new ModelService({
+    store: modelStore,
+    adapters: { ollama: new OllamaAdapter(), llamacpp: new LlamaCppAdapter() },
+    logger,
+  });
+
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -49,6 +68,16 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   app.use("/api/v1/nodes", createNodesRouter(control, config.sessionSecret));
   app.use("/api/v1/commands", createCommandsRouter(control, config.sessionSecret));
   app.use("/api/v1/cluster", createClusterRouter(control, config.sessionSecret));
+  app.use(
+    "/api/v1/jobs",
+    requireAuth(config.sessionSecret),
+    createJobsRouter(jobs, requireRole("admin", "operator")),
+  );
+  app.use(
+    "/api/v1/models",
+    requireAuth(config.sessionSecret),
+    createModelsRouter(models, requireRole("admin", "operator")),
+  );
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ControlClientError) {
@@ -69,9 +98,12 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     httpServer,
     users,
     control,
+    jobs,
+    models,
     realtime,
     logger,
     close: async () => {
+      stopJobPoller();
       realtime.close();
       await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));
     },

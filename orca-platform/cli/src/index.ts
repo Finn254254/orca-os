@@ -168,21 +168,78 @@ program
 
 program
   .command("models")
-  .description("List AI models (requires Orca Model Manager, not yet built)")
-  .action(() =>
+  .description("List registered AI models")
+  .option("--json", "output raw JSON")
+  .action((opts) =>
     run(async () => {
       const api = await client();
-      await api.get("/api/v1/models");
+      const models = await api.get<
+        { id: string; name: string; runtime: string; state: string; downloadProgressPct?: number }[]
+      >("/api/v1/models");
+      if (opts.json) return printJson(models);
+      console.log(
+        table(
+          models.map((m) => ({
+            id: m.id,
+            name: m.name,
+            runtime: m.runtime,
+            state: m.state,
+            progress: m.downloadProgressPct !== undefined ? `${m.downloadProgressPct}%` : "-",
+          })),
+        ),
+      );
     }),
   );
 
 program
-  .command("jobs")
-  .description("List compute jobs (requires Orca Compute, not yet built)")
-  .action(() =>
+  .command("model-pull <runtime> <name>")
+  .description('Pull a model from a runtime, e.g. "orca model-pull ollama llama3"')
+  .action((runtimeArg, name) =>
     run(async () => {
       const api = await client();
-      await api.get("/api/v1/jobs");
+      const model = await api.post("/api/v1/models/pull", { runtime: runtimeArg, name });
+      printJson(model);
+    }),
+  );
+
+interface JobSummary {
+  id: string;
+  spec: { type: string; command?: string[] };
+  state: string;
+  assignedNodeId?: string;
+  createdAt: string;
+}
+
+program
+  .command("jobs")
+  .description("List compute jobs")
+  .option("--json", "output raw JSON")
+  .action((opts) =>
+    run(async () => {
+      const api = await client();
+      const jobs = await api.get<JobSummary[]>("/api/v1/jobs");
+      if (opts.json) return printJson(jobs);
+      console.log(
+        table(
+          jobs.map((j) => ({
+            id: j.id,
+            type: j.spec.type,
+            state: j.state,
+            node: j.assignedNodeId ?? "-",
+            created: new Date(j.createdAt).toLocaleString(),
+          })),
+        ),
+      );
+    }),
+  );
+
+program
+  .command("job <id>")
+  .description("Show details for one compute job")
+  .action((id) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.get(`/api/v1/jobs/${encodeURIComponent(id)}`));
     }),
   );
 
@@ -203,10 +260,49 @@ program
     }),
   );
 
+program
+  .command("run <command...>")
+  .description("Submit a compute job and wait for it to finish")
+  .option("--node <id>", "pin to a specific node id")
+  .option("--group <group>", "pin to a specific node group")
+  .option("--gpu", "require a GPU")
+  .action((command: string[], opts) =>
+    run(async () => {
+      const api = await client();
+      const job = await api.post<{ id: string; state: string }>("/api/v1/jobs", {
+        type: "shell",
+        command,
+        resources: opts.gpu ? { gpu: true } : {},
+        targetNodeId: opts.node,
+        targetGroup: opts.group,
+      });
+      console.log(`job ${job.id} submitted (${job.state})`);
+
+      const start = Date.now();
+      while (Date.now() - start < 30000) {
+        const current = await api.get<{ state: string; result?: Record<string, unknown>; failureReason?: string }>(
+          `/api/v1/jobs/${job.id}`,
+        );
+        if (current.state === "succeeded") {
+          console.log("succeeded");
+          if (current.result) printJson(current.result);
+          return;
+        }
+        if (current.state === "failed" || current.state === "cancelled") {
+          console.error(`${current.state}: ${current.failureReason ?? "no reason given"}`);
+          process.exitCode = 1;
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      console.error(`job ${job.id} is still running after 30s — check \`orca job ${job.id}\` for status`);
+      process.exitCode = 1;
+    }),
+  );
+
 // --- Commands whose backing subsystems land in later phases (Deploy, Update, Hardware Daemon, Backup). ---
 // Registered now so the CLI's shape is stable; each clearly reports what it needs once invoked.
 for (const [name, needs] of [
-  ["run", "Orca Compute (Phase 9)"],
   ["deploy", "Orca Deploy (Phase 13)"],
   ["update", "Orca Update (Phase 16)"],
   ["power", "Orca Hardware Daemon (Phase 15)"],

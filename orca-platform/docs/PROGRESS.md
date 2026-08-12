@@ -4,8 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-8 complete — the first major demo works.** Moving into Phase 9
-(Compute jobs).
+**Phases 1-11 complete.** Moving into Phase 12 (AI Gateway).
 
 ## Completed
 
@@ -180,9 +179,58 @@ Last updated: 2026-08-11 (autonomous build session).
     Model Manager/etc. are planned as libraries mounted into Orca API
     rather than separate services, mesh protocol summary, realtime design.
 
+- **Phase 9 — Orca Compute**
+  - New `run_job` command type (added to `@orca/shared`'s `CommandTypeSchema`),
+    handled by the agent (`agent/src/commands.ts`): real nodes `execFile`
+    the job's command with a configurable timeout; simulated nodes never
+    touch the host — they simulate timing/output (or fail on demand via
+    `payload.forceFail`, used in tests).
+  - `@orca/compute`: `JobStore` (durable job records), `JobService`
+    (submit → schedule via `@orca/scheduler` → dispatch a `run_job` command
+    via a `ControlPort` interface → poll for completion → record
+    result/logs), `createJobsRouter` mounted at `/api/v1/jobs`.
+  - Known limitation: cancelling a running job doesn't stop in-flight
+    execution yet (no cancel command); documented in `compute/README.md`.
+  - Tests: 11 (JobService scheduling/dispatch/completion/cancellation with
+    a fake `ControlPort`, router request/response contract).
+
+- **Phase 10 — Orca Scheduler**
+  - `@orca/scheduler`: pure `selectNode(nodes, spec)` — hard filters
+    (online, pinned node/group, required capability tags, CPU/RAM/GPU/VRAM)
+    then scores by free CPU%/RAM%/temperature penalty, returns a
+    human-readable reason either way (why picked, or why every node was
+    rejected). Recorded on the job as `schedulingReason`.
+  - Tests: 10, covering every filter and the scoring tie-breaks.
+
+- **Phase 11 — Orca Model Manager**
+  - `@orca/models`: `ModelStore` (registry), `ModelService` (pull → track
+    download progress → available/error, delete, sync-from-runtime),
+    mounted at `/api/v1/models`.
+  - `OllamaAdapter`: real HTTP client against Ollama's documented API
+    (tags/pull-with-streaming-progress/delete) — **not yet verified against
+    a live Ollama instance** (none available in this environment); tested
+    against a fake server matching the documented API shape. Flagged
+    clearly in `models/README.md` as the first thing to sanity-check
+    against a real `ollama serve`.
+  - `LlamaCppAdapter`: filesystem-based (`.gguf` files in a directory) —
+    fully verified with real file operations, no network dependency.
+  - Scope limitation (documented): manages one configured runtime endpoint
+    per adapter; per-node runtime discovery/routing across the cluster is
+    AI Gateway/Scheduler territory, not solved here.
+  - Tests: 21 (store, both adapters, service pull/error/delete/sync,
+    router contract).
+
+- **CLI and Dashboard updated to match**: `orca run <command...>` now
+  really submits and waits for a job (was a placeholder); `orca jobs`/
+  `orca job <id>` and `orca models`/`orca model-pull` are real. Dashboard's
+  Jobs and Models pages show live data (2s poll) instead of "coming soon".
+  Compute/Models routes and their RBAC (`admin`/`operator` to
+  submit/cancel/pull/delete, any authenticated role to read) added to
+  `openapi.json`.
+
 ## Partially completed / next up
 
-- Phases 9-24: not started (see `orca-platform/README.md` for the full
+- Phases 12-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -200,8 +248,8 @@ as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (6), `api` (6), `cli` (7), `dashboard` (9),
-`tests` e2e (4) = 55/55.
+`control` (6), `agent` (8), `compute` (11), `scheduler` (10), `models`
+(21), `api` (9), `cli` (7), `dashboard` (9), `tests` e2e (5) = 103/103.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -247,8 +295,9 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca Compute (Phase 9): job records (queued/scheduled/running/succeeded/
-   failed/cancelled), submission/execution on a single node to start, logs,
-   mounted into Orca API as `/api/v1/jobs`.
-2. Orca Scheduler (Phase 10): node scoring/selection for job placement.
-3. Orca Model Manager (Phase 11): registry + Ollama/llama.cpp adapters.
+1. Orca AI Gateway (Phase 12): unified inference API, OpenAI-compatible
+   where practical, routing chat/completion requests to a model via
+   `@orca/models` + `@orca/scheduler`.
+2. Orca Deploy (Phase 13): application manifest format, container-based
+   execution, `orca deploy`/`apps`/`app`/`remove`.
+3. Orca Storage (Phase 14): device/pool discovery, capacity/health.

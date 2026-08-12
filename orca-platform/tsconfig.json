@@ -7,6 +7,9 @@
     { "path": "control" },
     { "path": "agent" },
     { "path": "api" },
-    { "path": "cli" }
+    { "path": "cli" },
+    { "path": "scheduler" },
+    { "path": "compute" },
+    { "path": "models" }
   ]
 }
