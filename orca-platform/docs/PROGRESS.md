@@ -4,7 +4,7 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-18 complete. Phase 19 (Orca AI) backend complete, frontend in progress.**
+**Phases 1-19 complete.** Moving into Phase 20 (Orca Studio).
 
 ## Completed
 
@@ -379,7 +379,7 @@ Last updated: 2026-08-12 (autonomous build session).
     (full server with a configured token, `/health` still open), 1 in
     `api` (audit event recorded + admin-only access enforced).
 
-- **Phase 19 — Orca AI (backend)**
+- **Phase 19 — Orca AI**
   - `@orca/shared`: `ChatMessageSchema` (`role`/`content`) and
     `ConversationSchema` (`id`/`userId`/`title`/`model`/`messages`/
     `createdAt`/`updatedAt`) — the single source of truth for chat wire
@@ -410,13 +410,51 @@ Last updated: 2026-08-12 (autonomous build session).
     round trip against a fake OpenAI-SSE-shaped upstream server (same
     pattern as `aiGateway.test.ts`), list-scoped-to-user, 404 for another
     user's conversation, rename+delete.
-  - Frontend (`orca-platform/ai/`) not yet started — see Next work.
+  - `@orca/ai` (`orca-platform/ai/`): the chat frontend. React + Vite +
+    TypeScript, same conventions as `@orca/dashboard` (no UI framework,
+    shared design tokens, `getToken()`-gated routing). Dev server on
+    `:5174`, proxies `/api` to Orca API (`vite.config.ts`).
+    - Sidebar: lists the signed-in user's conversations
+      (`GET /api/v1/ai/conversations`), "+ New chat", inline rename
+      (double-click a title → input → Enter/blur to commit), delete.
+    - Model picker: populated from `GET /api/v1/ai/models` (AI Gateway's
+      OpenAI-compatible list, already filtered to models in
+      `available`/`loaded` state); fixed once a conversation exists,
+      selectable for a new chat.
+    - Streaming: `sendMessage()` in `src/api.ts` does a raw `fetch` +
+      `ReadableStream` read loop against
+      `POST /api/v1/ai/conversations/:id/messages` (not `EventSource`,
+      since that API doesn't support POST bodies/auth headers), parsing
+      SSE deltas with a browser-side copy of `parseSseChunk`
+      (`src/sseParser.ts` — duplicated rather than importing
+      `@orca/ai-gateway`, whose entry point pulls in Express, a Node-only
+      dependency chain with no place in a browser bundle). Deltas render
+      live with a blinking-cursor indicator.
+    - Markdown/code rendering: `src/components/Markdown.tsx`, a small
+      dependency-free renderer (headings, bold/italic, inline code, fenced
+      code blocks with a language label, links, un/ordered lists) that
+      builds real React elements — never `dangerouslySetInnerHTML`, so
+      there's no HTML-injection surface from a model's output.
+    - File upload architecture: not yet implemented (no attachment UI or
+      upload endpoint) — left for a follow-up once a concrete Storage
+      target exists for it, per the "architecture" scoping used elsewhere
+      in this build (e.g. Backup's app-data handling).
+    - Tests: 17 unit/component (`api.test.ts` 6, `sseParser.test.ts` 5,
+      `Markdown.test.tsx` 6) plus 1 real headless-browser end-to-end test
+      (`tests/e2e/ai.test.ts`): logs in, waits for a real registered model
+      to populate the picker, sends a message, and asserts the streamed
+      reply renders through the real Markdown renderer (bold text becomes
+      a real `<strong>`) against real Control + API processes and a fake
+      Ollama/OpenAI-shaped upstream runtime — then renames and deletes the
+      conversation through the real UI.
+    - Wired into `scripts/dev-cluster.mjs` (starts alongside Control/API/3
+      simulated nodes/Dashboard on `:5174`) and documented in the root
+      `README.md`'s getting-started instructions.
 
 ## Partially completed / next up
 
-- Phase 19 frontend, Phases 20-24: not started (see `orca-platform/README.md`
-  for the full component list and the top-level build instructions for
-  phase ordering).
+- Phases 20-24: not started (see `orca-platform/README.md` for the full
+  component list and the top-level build instructions for phase ordering).
 
 ## Tests
 
@@ -431,7 +469,7 @@ All tests currently green: `shared` (7), `mesh` (4), `security` (10),
 `control` (12), `agent` (12), `compute` (11), `scheduler` (10), `models`
 (21), `ai-gateway` (16), `deploy` (11), `storage` (11),
 `hardware-daemon` (16), `update` (18), `backup` (13), `api` (20),
-`cli` (7), `dashboard` (9), `tests` e2e (7) = 215/215.
+`cli` (7), `dashboard` (9), `ai` (17), `tests` e2e (8) = 233/233.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -470,6 +508,14 @@ browser test only — not used elsewhere.
 - Every service's config is env-var driven with no hard-coded secrets;
   `ORCA_CLUSTER_TOKEN` is required (the process throws on startup if unset)
   rather than defaulting to a guessable value.
+- Browser apps (`dashboard/`, `ai/`) never import a Node-oriented backend
+  package for a shared utility, even a pure one — `ai/src/sseParser.ts` is
+  a deliberate small duplication of `ai-gateway/src/sseParser.ts` rather
+  than a dependency on `@orca/ai-gateway` (whose entry point re-exports an
+  Express router), so the frontend bundle never has a reason to try to
+  resolve Node-only modules. Type-only imports from `@orca/shared` remain
+  fine (erased at build, e.g. `ChatMessage`/`Conversation`) since no
+  runtime code is pulled in.
 
 ## OS integration requirements
 
@@ -477,9 +523,9 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca AI (Phase 19) frontend: `orca-platform/ai/` React app — chat UI,
-   conversation history sidebar, model selection, streaming display,
-   markdown/code rendering. Backend (schema, conversation storage, SSE
-   passthrough route) is done — see Phase 19 above.
-2. Orca Studio (Phase 20): agent/workflow builder.
-3. App backend (Phase 21): endpoints for future mobile/desktop apps.
+1. Orca Studio (Phase 20): agent/workflow builder — system prompts, model
+   selection, tool configuration, workflow definitions, saved
+   configurations, a testing console, execution results.
+2. App backend (Phase 21): endpoints for future mobile/desktop apps.
+3. Full integration tests (Phase 22), documentation (Phase 23),
+   platform-wide testing/fixes/cleanup (Phase 24).

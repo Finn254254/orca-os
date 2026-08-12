@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Starts a full local Orca cluster for development/demo purposes:
-// Orca Control, 3 simulated Orca Agents, Orca API, and Orca Dashboard.
+// Orca Control, 3 simulated Orca Agents, Orca API, Orca Dashboard, and
+// Orca AI.
 //
 // Usage:
 //   node scripts/dev-cluster.mjs
@@ -26,6 +27,7 @@ const ADMIN_PASSWORD = process.env.ORCA_ADMIN_PASSWORD ?? "admin-password";
 const CONTROL_PORT = Number(process.env.ORCA_CONTROL_PORT ?? 7000);
 const API_PORT = Number(process.env.ORCA_API_PORT ?? 8080);
 const DASHBOARD_PORT = Number(process.env.ORCA_DASHBOARD_PORT ?? 5173);
+const AI_PORT = Number(process.env.ORCA_AI_PORT ?? 5174);
 
 const TSX_BIN = join(ROOT, "node_modules", ".bin", "tsx");
 const VITE_BIN = join(ROOT, "node_modules", ".bin", "vite");
@@ -139,10 +141,21 @@ async function main() {
   );
   await waitForHealth(`http://127.0.0.1:${DASHBOARD_PORT}`, "orca-dashboard");
 
+  console.log("Starting Orca AI…");
+  spawnNamed(
+    "ai",
+    VITE_BIN,
+    ["--port", String(AI_PORT), "--strictPort"],
+    { ORCA_API_PROXY_TARGET: `http://127.0.0.1:${API_PORT}` },
+    join(ROOT, "ai"),
+  );
+  await waitForHealth(`http://127.0.0.1:${AI_PORT}`, "orca-ai");
+
   console.log("\n=========================================");
   console.log(" Orca dev cluster is up");
   console.log("=========================================");
   console.log(` Dashboard: http://localhost:${DASHBOARD_PORT}`);
+  console.log(` Orca AI:   http://localhost:${AI_PORT}`);
   console.log(` API:       http://localhost:${API_PORT}/api/v1`);
   console.log(` Control:   http://localhost:${CONTROL_PORT}/api/v1`);
   console.log(` Login:     ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
