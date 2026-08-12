@@ -4,7 +4,12 @@ Last updated: 2026-08-12 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-23 complete.** Moving into Phase 24 (platform-wide cleanup).
+**All 24 phases complete.** The originally-scoped Orca Platform build is
+done: every subsystem in the phase plan exists, is tested, and is wired
+together through Orca API. See "Partially completed / next up" below for
+what's explicitly out of scope rather than finished, and "Known
+limitations" for what's real but narrower than a production system would
+need.
 
 ## Completed
 
@@ -654,10 +659,33 @@ Last updated: 2026-08-12 (autonomous build session).
     (still not run end-to-end — no Docker daemon in this environment, an
     existing documented limitation, not a new one).
 
+- **Phase 24 — Platform-wide testing, fixes, cleanup**
+  - Full re-run from a clean slate: deleted every `.tsbuildinfo` and
+    `dist/`, whole-platform `tsc -b` clean, all three frontend packages'
+    standalone `tsc --noEmit` clean, `npm test` clean (270/270).
+  - Verified `.gitignore` coverage: every `node_modules/`, `dist/`, and
+    `tsconfig.tsbuildinfo` across all 21 workspace packages shows as
+    ignored (`git status --ignored`), none ever staged.
+  - Checked for committed secrets (common API-key/private-key patterns,
+    `.env*` files) — none found; every secret is env-var-driven with no
+    hard-coded default, as established from Phase 1 onward.
+  - Ran the real one-command demo (`scripts/dev-cluster.mjs`) end to end
+    one more time, hitting a live endpoint in every subsystem through
+    the real HTTP API (not a test double): `/app/discover` before login,
+    login, 3 simulated nodes reaching `online`, `/app/summary`
+    reflecting their real average CPU/RAM, `/models`, `/studio/agents`,
+    `/ai/conversations`, and `/audit`. Confirmed clean shutdown with no
+    leftover processes.
+  - No dead/unused code found worth removing beyond what was already
+    cleaned up phase-by-phase as it was written.
+
 ## Partially completed / next up
 
-- Phase 24: not started (see `orca-platform/README.md` for the full
-  component list and the top-level build instructions for phase ordering).
+Nothing from the original 24-phase plan is unstarted. What's genuinely
+out of scope, not just unfinished, is listed in Known limitations below
+(TLS, push delivery, mDNS discovery, tool execution, log aggregation,
+etc.) — each is a deliberate MVP boundary with a documented reason, not
+a phase that got skipped.
 
 ## Tests
 
@@ -757,5 +785,22 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Platform-wide testing, fixes, and cleanup (Phase 24) — the final
-   phase in the original build plan.
+All 24 originally-scoped phases are complete. Beyond-scope follow-ups a
+future session might pick up, roughly in order of likely value — none
+of these are half-built, they're genuinely not started:
+
+1. TLS on the mesh WebSocket and Control's/API's HTTP servers (needs
+   Orca OS-side certificate provisioning; see `docs/OS_INTEGRATION.md`).
+2. A real push relay (APNs/FCM) reading from App Backend's `DeviceStore`
+   to actually deliver notifications, not just register tokens.
+3. mDNS/Bonjour service advertisement (Orca OS side) so App Backend's
+   `/discover` has something to be reached through without a
+   manually-entered address.
+4. Tool execution for Orca Studio agent configs (currently declarative
+   metadata only) — needs a function-calling-capable runtime
+   integration.
+5. Wiring Hardware Daemon cluster-wide (per-node endpoint discovery/
+   routing through Orca API) — currently a standalone service per node.
+6. A real database backing `JsonStore`'s interfaces if/when concurrent-
+   writer or multi-process persistence needs outgrow a single JSON file
+   per service.
