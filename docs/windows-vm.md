@@ -6,6 +6,8 @@ Install [QEMU for Windows](https://www.qemu.org/download/#windows) and add its i
 
 Use the UEFI firmware files installed with QEMU or edk2: `OVMF_CODE.fd` and `OVMF_VARS.fd`. Copy `OVMF_VARS.fd` before each clean test VM because it is writable guest state.
 
+When downloading a build artifact, keep its `.sha256` and `.manifest.json` files with the raw image. The manifest identifies the Orca release, architecture and checksum; verify the checksum before launching the VM.
+
 ## Launch with PowerShell
 
 ```powershell

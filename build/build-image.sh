@@ -29,4 +29,5 @@ SOURCE_DATE_EPOCH="$source_date_epoch" mkosi -C "$project_root/build" -f build \
 
 image="$output_dir/orca-os-x86_64.raw"
 "$project_root/build/verify-image.sh" "$image"
+SOURCE_DATE_EPOCH="$source_date_epoch" "$project_root/build/write-manifest.sh" "$image"
 echo "Built $image"

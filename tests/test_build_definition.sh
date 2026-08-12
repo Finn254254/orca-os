@@ -13,6 +13,24 @@ grep -q 'SOURCE_DATE_EPOCH' "$project_root/build/build-image.sh"
 verify_output="$($project_root/build/verify-image.sh image.raw --dry-run)"
 grep -q 'GPT and EFI partition' <<<"$verify_output"
 
+manifest_root="$(mktemp -d)"
+trap 'rm -rf "$vm_root" "${smoke_root:-}" "$manifest_root"' EXIT
+printf 'orca-image' > "$manifest_root/orca-os-x86_64.raw"
+SOURCE_DATE_EPOCH=0 "$project_root/build/write-manifest.sh" "$manifest_root/orca-os-x86_64.raw" "$manifest_root/manifest.json" >/dev/null
+python3 - "$manifest_root/manifest.json" <<'PY'
+import hashlib
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+assert payload["schemaVersion"] == 1
+assert payload["architecture"] == "x86_64"
+assert payload["artifact"]["filename"] == "orca-os-x86_64.raw"
+assert payload["artifact"]["sha256"] == hashlib.sha256(b"orca-image").hexdigest()
+assert payload["sourceDateEpoch"] == 0
+assert payload["buildTimestamp"] == "1970-01-01T00:00:00Z"
+PY
+
 vm_root="$(mktemp -d)"
 smoke_root=""
 trap 'rm -rf "$vm_root" "${smoke_root:-}"' EXIT
@@ -28,6 +46,7 @@ if PATH="$vm_root/bin:$PATH" ORCA_IMAGE="$vm_root/image.raw" ORCA_OVMF_CODE="$vm
   exit 1
 fi
 grep -q 'sudo env "PATH=$PATH"' "$project_root/.github/workflows/build-image.yml"
+grep -q 'orca-os-x86_64.raw.manifest.json' "$project_root/.github/workflows/build-image.yml"
 
 smoke_root="$(mktemp -d)"
 mkdir -p "$smoke_root/bin"
