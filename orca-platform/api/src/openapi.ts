@@ -57,6 +57,16 @@ export function buildOpenApiSpec(): Record<string, unknown> {
         get: { summary: "Get cluster config", security: [bearerAuth], responses: { "200": { description: "Config" } } },
         put: { summary: "Update cluster config (admin)", security: [bearerAuth], responses: { "200": { description: "Config" } } },
       },
+      "/ai/models": {
+        get: { summary: "List available models (OpenAI-compatible)", security: [bearerAuth], responses: { "200": { description: "Model list" } } },
+      },
+      "/ai/chat/completions": {
+        post: {
+          summary: "Chat completion, OpenAI-compatible request/response shape, streaming supported",
+          security: [bearerAuth],
+          responses: { "200": { description: "Completion (or an SSE stream if stream: true)" } },
+        },
+      },
       "/models": {
         get: { summary: "List registered models", security: [bearerAuth], responses: { "200": { description: "Models" } } },
       },

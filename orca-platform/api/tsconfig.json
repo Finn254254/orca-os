@@ -11,7 +11,8 @@
     { "path": "../control" },
     { "path": "../scheduler" },
     { "path": "../compute" },
-    { "path": "../models" }
+    { "path": "../models" },
+    { "path": "../ai-gateway" }
   ],
   "include": ["src"]
 }

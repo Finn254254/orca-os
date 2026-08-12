@@ -2,6 +2,7 @@ import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
+import { AiGatewayService, createAiGatewayRouter } from "@orca/ai-gateway";
 import { JobService, JobStore, createJobsRouter, startJobPoller } from "@orca/compute";
 import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
 import { UserStore } from "@orca/security";
@@ -23,6 +24,7 @@ export interface ApiServerHandle {
   control: ControlClient;
   jobs: JobService;
   models: ModelService;
+  aiGateway: AiGatewayService;
   realtime: RealtimeHub;
   logger: Logger;
   close: () => Promise<void>;
@@ -57,6 +59,14 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     logger,
   });
 
+  const aiGateway = new AiGatewayService({
+    models: modelStore,
+    runtimeUrls: {
+      ollama: process.env.ORCA_OLLAMA_URL ?? "http://localhost:11434",
+      llamacpp: process.env.ORCA_LLAMACPP_SERVER_URL,
+    },
+  });
+
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -78,6 +88,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     requireAuth(config.sessionSecret),
     createModelsRouter(models, requireRole("admin", "operator")),
   );
+  app.use("/api/v1/ai", requireAuth(config.sessionSecret), createAiGatewayRouter(aiGateway));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ControlClientError) {
@@ -100,6 +111,7 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     control,
     jobs,
     models,
+    aiGateway,
     realtime,
     logger,
     close: async () => {

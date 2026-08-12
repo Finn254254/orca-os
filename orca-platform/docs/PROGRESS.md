@@ -4,7 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-11 complete.** Moving into Phase 12 (AI Gateway).
+**Phases 1-12 complete.** Moving into Phase 13 (Orca Deploy).
 
 ## Completed
 
@@ -228,9 +228,29 @@ Last updated: 2026-08-11 (autonomous build session).
   submit/cancel/pull/delete, any authenticated role to read) added to
   `openapi.json`.
 
+- **Phase 12 — Orca AI Gateway**
+  - `@orca/ai-gateway`: `AiGatewayService` routes chat completions to
+    whichever runtime a model is registered under (`@orca/models`), then
+    forwards to that runtime's OpenAI-compatible `/v1/chat/completions`
+    endpoint — both Ollama and llama.cpp's server expose one natively, so
+    the gateway is a thin, honest proxy rather than a reimplementation.
+    Non-streaming responses are parsed and returned; streaming responses
+    are proxied byte-for-byte so OpenAI-SDK clients work unmodified.
+  - Mounted at `/api/v1/ai` (`GET /models`, `POST /chat/completions`,
+    OpenAI-style error envelope).
+  - Tests: 9 unit (fake OpenAI-compatible upstream server, covering
+    listing, unregistered-model/no-endpoint errors, non-streaming +
+    streaming proxying, upstream-error passthrough) + 3 through the real
+    API server (pull a model via the real Model Manager pipeline, chat
+    through the real HTTP stack to a fake Ollama upstream, list models,
+    404 on an unregistered model).
+  - Same scope limitation as Model Manager: routes to one configured
+    endpoint per runtime, not per-node; documented in
+    `ai-gateway/README.md`.
+
 ## Partially completed / next up
 
-- Phases 12-24: not started (see `orca-platform/README.md` for the full
+- Phases 13-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -249,7 +269,8 @@ whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
 `control` (6), `agent` (8), `compute` (11), `scheduler` (10), `models`
-(21), `api` (9), `cli` (7), `dashboard` (9), `tests` e2e (5) = 103/103.
+(21), `ai-gateway` (9), `api` (12), `cli` (7), `dashboard` (9),
+`tests` e2e (5) = 115/115.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
