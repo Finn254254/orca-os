@@ -281,4 +281,65 @@ describe("OrcaAgent", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toMatch(/manifest/);
   });
+
+  it("simulates apply_update and rollback_update on simulated nodes", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_9",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const applyResultPromise = waitFor<{ status: string; result?: Record<string, unknown> }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_apply",
+      nodeId: "node_agent_9",
+      type: "apply_update",
+      payload: { version: "1.2.0", artifactUrl: "https://example.invalid/orca-1.2.0.img", checksum: "abc" },
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const applyResult = await applyResultPromise;
+    expect(applyResult.status).toBe("succeeded");
+    expect(applyResult.result?.simulated).toBe(true);
+    expect(applyResult.result?.version).toBe("1.2.0");
+
+    const rollbackResultPromise = waitFor<{ status: string; result?: Record<string, unknown> }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_rollback",
+      nodeId: "node_agent_9",
+      type: "rollback_update",
+      payload: {},
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const rollbackResult = await rollbackResultPromise;
+    expect(rollbackResult.status).toBe("succeeded");
+    expect(rollbackResult.result?.rolledBack).toBe(true);
+  });
+
+  it("rejects apply_update with a missing version/artifactUrl", async () => {
+    agent = new OrcaAgent({
+      config: makeConfig({ simulated: true }),
+      nodeId: "node_agent_10",
+      metrics: new SimulatedMetricsProvider(),
+      logger: silentLogger,
+    });
+    await agent.start();
+    await waitFor(meshServer, "hello");
+
+    const resultPromise = waitFor<{ status: string; error?: string }>(meshServer, "commandResult");
+    meshServer.sendCommand({
+      id: "cmd_bad_update",
+      nodeId: "node_agent_10",
+      type: "apply_update",
+      payload: {},
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    });
+    const result = await resultPromise;
+    expect(result.status).toBe("failed");
+  });
 });

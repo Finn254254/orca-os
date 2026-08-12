@@ -111,6 +111,8 @@ export const CommandTypeSchema = z.enum([
   "run_job",
   "deploy_app",
   "remove_app",
+  "apply_update",
+  "rollback_update",
 ]);
 export type CommandType = z.infer<typeof CommandTypeSchema>;
 
@@ -285,6 +287,44 @@ export const AppDeploymentSchema = z.object({
   error: z.string().optional(),
 });
 export type AppDeployment = z.infer<typeof AppDeploymentSchema>;
+
+// ---- Update (cluster-wide version rollout) ----
+
+export const UpdateManifestSchema = z.object({
+  version: z.string(),
+  releaseNotes: z.string().optional(),
+  artifactUrl: z.string(),
+  checksum: z.string(),
+  signature: z.string().optional(),
+  createdAt: z.string().datetime(),
+});
+export type UpdateManifest = z.infer<typeof UpdateManifestSchema>;
+
+export const RolloutStrategySchema = z.enum(["all-at-once", "staged"]);
+export type RolloutStrategy = z.infer<typeof RolloutStrategySchema>;
+
+export const RolloutStateSchema = z.enum(["pending", "in-progress", "completed", "failed", "rolled-back"]);
+export type RolloutState = z.infer<typeof RolloutStateSchema>;
+
+export const NodeUpdateStatusSchema = z.object({
+  state: z.enum(["pending", "applying", "succeeded", "failed", "rolled-back"]),
+  error: z.string().optional(),
+  updatedAt: z.string().datetime(),
+});
+export type NodeUpdateStatus = z.infer<typeof NodeUpdateStatusSchema>;
+
+export const RolloutSchema = z.object({
+  id: z.string(),
+  manifest: UpdateManifestSchema,
+  targetNodeIds: z.array(z.string()),
+  strategy: RolloutStrategySchema,
+  stagePct: z.number().min(1).max(100).default(100),
+  state: RolloutStateSchema,
+  perNodeStatus: z.record(z.string(), NodeUpdateStatusSchema).default({}),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Rollout = z.infer<typeof RolloutSchema>;
 
 // ---- Models ----
 

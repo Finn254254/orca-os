@@ -86,9 +86,9 @@ describe("orca CLI end-to-end", () => {
     expect(models.code).toBe(0);
     expect(models.stdout).toContain("(none)");
 
-    const planned = await runCli(["update"], cliEnv);
+    const planned = await runCli(["power"], cliEnv);
     expect(planned.code).toBe(1);
-    expect(planned.stderr).toContain("Orca Update");
+    expect(planned.stderr).toContain("Orca Hardware Daemon");
   }, 30000);
 
   it("submits and waits for a compute job via `orca run`", async () => {
@@ -213,5 +213,66 @@ describe("orca CLI end-to-end", () => {
     const removeResult = await runCli(["remove", appId], cliEnv);
     expect(removeResult.code).toBe(0);
     expect(removeResult.stdout).toContain("stopped");
+  }, 30000);
+
+  it("publishes and rolls out an update via `orca update`", async () => {
+    const controlPort = pickPort();
+    const apiPort = pickPort();
+    const controlDir = await mkdtemp(join(tmpdir(), "orca-cli-update-control-"));
+    const apiDir = await mkdtemp(join(tmpdir(), "orca-cli-update-api-"));
+    const agentDir = await mkdtemp(join(tmpdir(), "orca-cli-update-agent-"));
+    const cliConfigDir = await mkdtemp(join(tmpdir(), "orca-cli-update-home-"));
+    dirs = [controlDir, apiDir, agentDir, cliConfigDir];
+
+    controlProc = spawnService("control/src/index.ts", {
+      ORCA_CONTROL_PORT: String(controlPort),
+      ORCA_CLUSTER_TOKEN: CLUSTER_TOKEN,
+      ORCA_DATA_DIR: controlDir,
+      ORCA_LOG_PRETTY: "0",
+    });
+    await waitUntil(async () => (await fetch(`http://127.0.0.1:${controlPort}/api/v1/health`).catch(() => undefined))?.ok === true);
+
+    apiProc = spawnService("api/src/index.ts", {
+      ORCA_API_PORT: String(apiPort),
+      ORCA_CONTROL_URL: `http://127.0.0.1:${controlPort}`,
+      ORCA_SESSION_SECRET: SESSION_SECRET,
+      ORCA_ADMIN_USERNAME: "admin",
+      ORCA_ADMIN_PASSWORD: "admin-password",
+      ORCA_DATA_DIR: apiDir,
+      ORCA_LOG_PRETTY: "0",
+    });
+    await waitUntil(async () => (await fetch(`http://127.0.0.1:${apiPort}/api/v1/health`).catch(() => undefined))?.ok === true);
+
+    agentProc = spawnService("agent/src/index.ts", {
+      ORCA_CONTROL_URL: `ws://127.0.0.1:${controlPort}/mesh`,
+      ORCA_CLUSTER_TOKEN: CLUSTER_TOKEN,
+      ORCA_NODE_NAME: "cli-update-node",
+      ORCA_SIMULATED: "1",
+      ORCA_DATA_DIR: agentDir,
+      ORCA_LOG_PRETTY: "0",
+    });
+
+    const cliEnv = { ORCA_CLI_CONFIG_DIR: cliConfigDir };
+    const login = await runCli(["login", "--url", `http://127.0.0.1:${apiPort}`, "-u", "admin", "-p", "admin-password"], cliEnv);
+    expect(login.code).toBe(0);
+
+    await waitUntil(async () => {
+      const nodes = await runCli(["nodes", "--json"], cliEnv);
+      return nodes.code === 0 && JSON.parse(nodes.stdout).some((n: { status: string }) => n.status === "online");
+    }, 10000);
+
+    const publish = await runCli(["update", "publish", "1.0.0", "https://example.invalid/img", "sha256:abc"], cliEnv);
+    expect(publish.code).toBe(0);
+    expect(publish.stdout).toContain("1.0.0");
+
+    const rollout = await runCli(["update", "rollout", "1.0.0"], cliEnv);
+    expect(rollout.code).toBe(0);
+    const rolloutId = rollout.stdout.match(/rollout (\S+)/)?.[1];
+    expect(rolloutId).toBeTruthy();
+
+    await waitUntil(async () => {
+      const status = await runCli(["update", "status", rolloutId!], cliEnv);
+      return status.code === 0 && JSON.parse(status.stdout).state === "completed";
+    }, 10000);
   }, 30000);
 });

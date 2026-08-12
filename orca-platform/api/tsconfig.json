@@ -14,7 +14,8 @@
     { "path": "../models" },
     { "path": "../ai-gateway" },
     { "path": "../deploy" },
-    { "path": "../storage" }
+    { "path": "../storage" },
+    { "path": "../update" }
   ],
   "include": ["src"]
 }

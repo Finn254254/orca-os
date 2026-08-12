@@ -22,13 +22,19 @@ orca models / orca model-pull <runtime> <name>
 orca deploy <manifest.json>      # deploy an app from a manifest file
 orca apps / orca app <id>
 orca remove <id>                 # stop an app deployment
+
+orca update publish <version> <artifactUrl> <checksum>
+orca update rollout <version> [--group <g>] [--staged <pct>]
+orca update status <rolloutId>
+orca update continue <rolloutId>
+orca update rollback <rolloutId>
 ```
 
 `--url`/`--token` flags (or `ORCA_API_URL`/`ORCA_API_TOKEN` env vars)
 override the saved login for one-off/scripted use without `orca login`.
 
 Planned commands whose backing subsystems land in later phases —
-`update` (Update), `power` (Hardware Daemon), `backup` (Backup) — are
+`power` (Hardware Daemon cluster-wide routing), `backup` (Backup) — are
 registered now so the CLI's shape is stable, and each clearly reports what
 it needs when invoked rather than silently doing nothing. `logs` calls the
 corresponding Orca API endpoint, which returns 404 until log aggregation

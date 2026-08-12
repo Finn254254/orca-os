@@ -196,6 +196,38 @@ describe("orca-api", () => {
     client.stop();
   });
 
+  it("publishes a manifest and rolls it out to a real node end-to-end", async () => {
+    const client = new MeshClient({ url: controlWsUrl, token: CLUSTER_TOKEN, nodeId: "node_update_worker", name: "update-worker-1" });
+    client.on("command", (command) => {
+      if (command.type === "apply_update") client.sendCommandResult(command.id, "succeeded", { installed: true });
+    });
+    client.start();
+    await waitFor(client, "ack");
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get("/api/v1/nodes").set("authorization", `Bearer ${adminToken}`);
+      return res.body.some((n: { status: string }) => n.status === "online");
+    });
+
+    const manifestRes = await request(apiBaseUrl)
+      .post("/api/v1/updates/manifests")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ version: "2.0.0", artifactUrl: "https://example.invalid/img", checksum: "sha256:xyz" });
+    expect(manifestRes.status).toBe(201);
+
+    const rolloutRes = await request(apiBaseUrl)
+      .post("/api/v1/updates/rollouts")
+      .set("authorization", `Bearer ${adminToken}`)
+      .send({ version: "2.0.0" });
+    expect(rolloutRes.status).toBe(202);
+
+    await waitUntil(async () => {
+      const res = await request(apiBaseUrl).get(`/api/v1/updates/rollouts/${rolloutRes.body.id}`).set("authorization", `Bearer ${adminToken}`);
+      return res.body.state === "completed";
+    }, 5000);
+
+    client.stop();
+  });
+
   it("rejects job submission from a viewer role but allows reading", async () => {
     await request(apiBaseUrl)
       .post("/api/v1/users")

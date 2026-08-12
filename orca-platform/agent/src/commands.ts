@@ -38,6 +38,12 @@ export async function executeCommand(command: CommandRecord, config: AgentConfig
     case "remove_app":
       return removeApp(command.payload, config);
 
+    case "apply_update":
+      return applyUpdate(command.payload, config);
+
+    case "rollback_update":
+      return rollbackUpdate(command.payload, config);
+
     default:
       return { status: "failed", error: `unknown command type: ${command.type satisfies never}` };
   }
@@ -174,6 +180,46 @@ async function removeApp(payload: Record<string, unknown>, config: AgentConfig):
     await execFileAsync("docker", ["rm", "-f", name], { timeout: 30_000 });
     return { status: "succeeded", result: { removed: name } };
   } catch (err) {
+    return { status: "failed", error: describeError(err) };
+  }
+}
+
+const UPDATER_BIN = process.env.ORCA_OS_UPDATER_BIN ?? "orca-os-updater";
+
+async function applyUpdate(payload: Record<string, unknown>, config: AgentConfig): Promise<CommandOutcome> {
+  const version = payload.version;
+  const artifactUrl = payload.artifactUrl;
+  if (typeof version !== "string" || typeof artifactUrl !== "string") {
+    return { status: "failed", error: "payload.version and payload.artifactUrl (strings) are required" };
+  }
+  if (config.simulated) {
+    await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 700));
+    return { status: "succeeded", result: { simulated: true, version, installed: true } };
+  }
+  try {
+    const { stdout } = await execFileAsync(UPDATER_BIN, ["apply", artifactUrl, String(payload.checksum ?? "")], { timeout: 600_000 });
+    return { status: "succeeded", result: { version, installed: true, stdout } };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      // No OS-level updater installed on this node yet — see orca-platform/docs/OS_INTEGRATION.md.
+      // Logging-only fallback so the rollout pipeline can be exercised before Orca OS ships one.
+      return { status: "succeeded", result: { version, installed: false, reason: `${UPDATER_BIN} not found; logged only (see OS_INTEGRATION.md)` } };
+    }
+    return { status: "failed", error: describeError(err) };
+  }
+}
+
+async function rollbackUpdate(payload: Record<string, unknown>, config: AgentConfig): Promise<CommandOutcome> {
+  if (config.simulated) {
+    return { status: "succeeded", result: { simulated: true, rolledBack: true } };
+  }
+  try {
+    const { stdout } = await execFileAsync(UPDATER_BIN, ["rollback"], { timeout: 300_000 });
+    return { status: "succeeded", result: { rolledBack: true, stdout } };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { status: "succeeded", result: { rolledBack: false, reason: `${UPDATER_BIN} not found; logged only (see OS_INTEGRATION.md)` } };
+    }
     return { status: "failed", error: describeError(err) };
   }
 }

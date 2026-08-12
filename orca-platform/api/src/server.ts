@@ -8,6 +8,7 @@ import { AppStore, DeployService, createAppsRouter, startDeployPoller } from "@o
 import { LlamaCppAdapter, ModelService, ModelStore, OllamaAdapter, createModelsRouter } from "@orca/models";
 import { UserStore } from "@orca/security";
 import { StorageService, StorageStore, createStorageRouter } from "@orca/storage";
+import { UpdateService, UpdateStore, createUpdateRouter, startUpdatePoller } from "@orca/update";
 import { createLogger, type Logger } from "@orca/shared";
 import type { ApiConfig } from "./config.js";
 import { ControlClient, ControlClientError } from "./controlClient.js";
@@ -28,6 +29,7 @@ export interface ApiServerHandle {
   models: ModelService;
   deploy: DeployService;
   storage: StorageService;
+  update: UpdateService;
   aiGateway: AiGatewayService;
   realtime: RealtimeHub;
   logger: Logger;
@@ -72,6 +74,11 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
   await storageStore.init();
   const storage = new StorageService(control, storageStore);
 
+  const updateStore = new UpdateStore(join(config.dataDir, "update"));
+  await updateStore.init();
+  const update = new UpdateService({ store: updateStore, control, signingKey: process.env.ORCA_UPDATE_SIGNING_KEY, logger });
+  const stopUpdatePoller = startUpdatePoller(update);
+
   const aiGateway = new AiGatewayService({
     models: modelStore,
     runtimeUrls: {
@@ -112,6 +119,11 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     requireAuth(config.sessionSecret),
     createStorageRouter(storage, requireRole("admin", "operator")),
   );
+  app.use(
+    "/api/v1/updates",
+    requireAuth(config.sessionSecret),
+    createUpdateRouter(update, requireRole("admin")),
+  );
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ControlClientError) {
@@ -136,12 +148,14 @@ export async function createApiServer(config: ApiConfig): Promise<ApiServerHandl
     models,
     deploy,
     storage,
+    update,
     aiGateway,
     realtime,
     logger,
     close: async () => {
       stopJobPoller();
       stopDeployPoller();
+      stopUpdatePoller();
       realtime.close();
       await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));
     },

@@ -81,6 +81,23 @@ export function buildOpenApiSpec(): Record<string, unknown> {
           responses: { "202": { description: "Download started" } },
         },
       },
+      "/updates/manifests": {
+        get: { summary: "List published update manifests", security: [bearerAuth], responses: { "200": { description: "Manifests" } } },
+        post: { summary: "Publish a signed update manifest (admin)", security: [bearerAuth], responses: { "201": { description: "Manifest" } } },
+      },
+      "/updates/rollouts": {
+        get: { summary: "List rollouts", security: [bearerAuth], responses: { "200": { description: "Rollouts" } } },
+        post: { summary: "Start a rollout (admin)", security: [bearerAuth], responses: { "202": { description: "Rollout" } } },
+      },
+      "/updates/rollouts/{id}": {
+        get: { summary: "Get a rollout", security: [bearerAuth], responses: { "200": { description: "Rollout" }, "404": { description: "Not found" } } },
+      },
+      "/updates/rollouts/{id}/continue": {
+        post: { summary: "Continue a staged rollout to its next batch (admin)", security: [bearerAuth], responses: { "200": { description: "Rollout" } } },
+      },
+      "/updates/rollouts/{id}/rollback": {
+        post: { summary: "Roll back a rollout's successfully-updated nodes (admin)", security: [bearerAuth], responses: { "200": { description: "Rollout" } } },
+      },
       "/storage/devices": {
         get: { summary: "List storage devices across the cluster", security: [bearerAuth], responses: { "200": { description: "Devices" } } },
       },

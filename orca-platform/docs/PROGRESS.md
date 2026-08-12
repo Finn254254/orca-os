@@ -4,7 +4,7 @@ Last updated: 2026-08-11 (autonomous build session).
 
 ## Current phase
 
-**Phases 1-14 complete.** Moving into Phase 15 (Hardware Daemon).
+**Phases 1-16 complete.** Moving into Phase 17 (Orca Backup).
 
 ## Completed
 
@@ -294,9 +294,47 @@ Last updated: 2026-08-11 (autonomous build session).
   - Tests: 11 (device aggregation, health thresholds, capacity math, pools
     and locations CRUD, router contract).
 
+- **Phase 15 — Orca Hardware Daemon**
+  - `@orca/hardware-daemon`: `HardwareBackend` interface (temperatures,
+    fans, power, LEDs, buttons, watchdog) with `SimulatedHardwareBackend`
+    as the only implementation today — evolving, plausible state (fans
+    drift toward target RPM, temperature responds to fan speed) rather
+    than static numbers. Its own small HTTP API (`/api/v1/temperatures`,
+    `/fans`, `/power`, `/leds`, `/buttons`, `/watchdog/*`).
+  - Deliberately **not** wired into Orca API/CLI/Dashboard cluster-wide
+    yet — same per-node-endpoint-discovery gap already documented for
+    Model Manager/AI Gateway. Delivers exactly what this phase asked for
+    (the abstraction + simulator so the rest of the platform isn't
+    blocked on physical hardware); cluster-wide routing is follow-up work.
+  - Tests: 16 (backend state transitions including watchdog expiry via
+    fake timers, full HTTP API contract).
+
+- **Phase 16 — Orca Update**
+  - `shared`: `UpdateManifest`/`Rollout` schemas; new `apply_update`/
+    `rollback_update` command types. Agent shells out to a pluggable
+    `orca-os-updater` binary (`ORCA_OS_UPDATER_BIN`) and — since that
+    binary doesn't exist yet — falls back to a **logging-only success**
+    when it's missing (`ENOENT`), exactly the "pluggable installer
+    interface with a logging-only default" documented in
+    `OS_INTEGRATION.md`. Simulated nodes simulate, matching every other
+    dispatched-command subsystem.
+  - `@orca/update`: HMAC-signed manifests (MVP tamper-evidence, documented
+    as not full asymmetric PKI), rollout dispatch reusing the same
+    Control-dispatch/poll pattern as Compute/Deploy, `all-at-once` and
+    `staged` (first-batch-then-`continueRollout`) strategies, rollback of
+    successfully-applied nodes. Mounted at `/api/v1/updates`.
+  - CLI: `orca update publish/rollout/status/continue/rollback` — all
+    real. Verified manually against a live cluster (signed manifest →
+    rollout → real simulated node applies it → completed) and via a real
+    CLI e2e test spawning the actual binary through the full lifecycle.
+  - Tests: 18 unit/integration (signing round-trip/tamper/wrong-key,
+    all-at-once/staged/failure/rollback/group-targeting, router contract)
+    + a real end-to-end test in `api.test.ts` (publish → rollout →
+    complete through a real dispatched node).
+
 ## Partially completed / next up
 
-- Phases 15-24: not started (see `orca-platform/README.md` for the full
+- Phases 17-24: not started (see `orca-platform/README.md` for the full
   component list and the top-level build instructions for phase ordering).
   Note: `models`/`jobs`/`storage`/`apps`/`logs` REST resources are
   intentionally *not* in the API yet — they'll be added alongside the
@@ -314,9 +352,10 @@ as they're created**, or they silently won't be typechecked as part of the
 whole-platform build.
 
 All tests currently green: `shared` (7), `mesh` (4), `security` (6),
-`control` (6), `agent` (10), `compute` (11), `scheduler` (10), `models`
-(21), `ai-gateway` (9), `deploy` (11), `storage` (11), `api` (13),
-`cli` (7), `dashboard` (9), `tests` e2e (6) = 141/141.
+`control` (6), `agent` (12), `compute` (11), `scheduler` (10), `models`
+(21), `ai-gateway` (9), `deploy` (11), `storage` (11),
+`hardware-daemon` (16), `update` (18), `api` (14), `cli` (7),
+`dashboard` (9), `tests` e2e (7) = 179/179.
 
 Note: `dashboard/` is intentionally **not** in the root `tsconfig.json`
 `tsc -b` graph — it's a Vite/browser app with `moduleResolution: "Bundler"`
@@ -362,10 +401,7 @@ See `orca-platform/docs/OS_INTEGRATION.md`.
 
 ## Next work
 
-1. Orca Hardware Daemon (Phase 15): simulated (later real) board-management
-   hardware — temperature/fans/power/LEDs/buttons/watchdogs.
-2. Orca Update (Phase 16): cluster-wide version tracking/rollout, behind a
-   pluggable installer interface (the actual OS install mechanism is
-   Orca OS's, see `docs/OS_INTEGRATION.md`).
-3. Orca Backup (Phase 17): backup jobs, config backups, restore metadata.
-4. Security improvements (Phase 18): TLS on the mesh, per-node identity.
+1. Orca Backup (Phase 17): backup jobs, cluster/app config backups,
+   restore metadata, scheduled backup architecture.
+2. Security improvements (Phase 18): TLS on the mesh, per-node identity,
+   audit events.

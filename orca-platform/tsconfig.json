@@ -13,6 +13,8 @@
     { "path": "models" },
     { "path": "ai-gateway" },
     { "path": "deploy" },
-    { "path": "storage" }
+    { "path": "storage" },
+    { "path": "hardware-daemon" },
+    { "path": "update" }
   ]
 }

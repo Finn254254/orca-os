@@ -365,11 +365,70 @@ program
     }),
   );
 
-// --- Commands whose backing subsystems land in later phases (Update, Hardware Daemon, Backup). ---
+const update = program.command("update").description("Cluster-wide update management");
+
+update
+  .command("publish <version> <artifactUrl> <checksum>")
+  .description("Publish a signed update manifest")
+  .action((version, artifactUrl, checksum) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.post("/api/v1/updates/manifests", { version, artifactUrl, checksum }));
+    }),
+  );
+
+update
+  .command("rollout <version>")
+  .description("Start a rollout")
+  .option("--group <group>", "target a node group")
+  .option("--staged <pct>", "staged rollout batch percentage (default: all at once)")
+  .action((version, opts) =>
+    run(async () => {
+      const api = await client();
+      const rollout = await api.post<{ id: string; state: string }>("/api/v1/updates/rollouts", {
+        version,
+        targetGroup: opts.group,
+        strategy: opts.staged ? "staged" : "all-at-once",
+        stagePct: opts.staged ? Number(opts.staged) : undefined,
+      });
+      console.log(`rollout ${rollout.id} — ${rollout.state}`);
+    }),
+  );
+
+update
+  .command("status <rolloutId>")
+  .description("Show a rollout's status")
+  .action((rolloutId) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.get(`/api/v1/updates/rollouts/${encodeURIComponent(rolloutId)}`));
+    }),
+  );
+
+update
+  .command("continue <rolloutId>")
+  .description("Continue a staged rollout to its next batch")
+  .action((rolloutId) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.post(`/api/v1/updates/rollouts/${encodeURIComponent(rolloutId)}/continue`));
+    }),
+  );
+
+update
+  .command("rollback <rolloutId>")
+  .description("Roll back a rollout's successfully-updated nodes")
+  .action((rolloutId) =>
+    run(async () => {
+      const api = await client();
+      printJson(await api.post(`/api/v1/updates/rollouts/${encodeURIComponent(rolloutId)}/rollback`));
+    }),
+  );
+
+// --- Commands whose backing subsystems land in later phases (Hardware Daemon cluster-wide routing, Backup). ---
 // Registered now so the CLI's shape is stable; each clearly reports what it needs once invoked.
 for (const [name, needs] of [
-  ["update", "Orca Update (Phase 16)"],
-  ["power", "Orca Hardware Daemon (Phase 15)"],
+  ["power", "Orca Hardware Daemon (Phase 15) cluster-wide routing"],
   ["backup", "Orca Backup (Phase 17)"],
 ] as const) {
   program
