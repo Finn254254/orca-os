@@ -7,11 +7,13 @@ if [[ -n "$ORCA_ROOT" ]]; then
   os_release_file="$ORCA_ROOT/etc/os-release"
   runtime_dir="$ORCA_ROOT/run/orca"
   state_dir="$ORCA_ROOT/var/lib/orca"
+  profile_file="$ORCA_ROOT/etc/orca-profile"
 else
   release_file="/etc/orca-release"
   os_release_file="/etc/os-release"
   runtime_dir="/run/orca"
   state_dir="/var/lib/orca"
+  profile_file="/etc/orca-profile"
 fi
 
 systemctl_cmd="${ORCA_SYSTEMCTL:-systemctl}"
@@ -27,10 +29,14 @@ if [[ -n "$ORCA_ROOT" ]]; then
 else
   token_init_cmd="${ORCA_TOKEN_INIT:-/usr/lib/orca/orca-token-init}"
   support_bundle_cmd="${ORCA_SUPPORT_BUNDLE:-/usr/lib/orca/orca-support-bundle}"
-resource_report_cmd="${ORCA_RESOURCE_REPORT:-/usr/lib/orca/resource-report}"
+  resource_report_cmd="${ORCA_RESOURCE_REPORT:-/usr/lib/orca/resource-report}"
 fi
 api_group="${ORCA_API_GROUP:-orca-api}"
-managed_services=(orca-agent orca-api ssh systemd-networkd)
+build_profile="$(tr -d '\r\n' < "$profile_file" 2>/dev/null || printf vm-development)"
+case "$build_profile" in
+  production-board) managed_services=(orca-agent orca-api systemd-networkd) ;;
+  *) managed_services=(orca-agent orca-api ssh systemd-networkd) ;;
+esac
 
 valid_hostname() {
   local candidate="$1" label
@@ -576,7 +582,11 @@ command_doctor() {
   fi
   agent_state="$(service_state orca-agent)"
   api_state="$(service_state orca-api)"
-  ssh_state="$(service_state ssh)"
+  if [[ "$build_profile" == production-board ]]; then
+    ssh_state=not-managed
+  else
+    ssh_state="$(service_state ssh)"
+  fi
   networkd_state="$(service_state systemd-networkd)"
   "$ip_cmd" -4 -o address show scope global 2>/dev/null | grep -q ' inet ' && network_ok=1 || true
   if [[ -z "$ORCA_ROOT" ]]; then
@@ -586,7 +596,8 @@ command_doctor() {
   fi
   overall=ok
   (( release_ok && cli_ok && unit_ok && enabled_ok && node_ok && network_ok && api_ok && token_ok )) || overall=failed
-  [[ "$agent_state" == active && "$api_state" == active && "$ssh_state" == active && "$networkd_state" == active ]] || overall=failed
+  [[ "$agent_state" == active && "$api_state" == active && "$networkd_state" == active ]] || overall=failed
+  [[ "$build_profile" == production-board || "$ssh_state" == active ]] || overall=failed
 
   if [[ "$option" == "--json" ]]; then
     ORCA_DOCTOR_OVERALL="$overall" ORCA_DOCTOR_RELEASE="$release_ok" ORCA_DOCTOR_CLI="$cli_ok" \

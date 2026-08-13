@@ -18,8 +18,16 @@ Build an x86-64 raw disk image on a Linux host with [mkosi](https://github.com/s
 make image
 ```
 
-The build always produces `out/orca-os-x86_64.raw`. It also creates a workspace-local development SSH key at `out/orca-vm.id_ed25519`, verifies that the artifact is a GPT image with an EFI System Partition, enforces explicit disk/initrd/EFI regression budgets, then writes a SHA-256 checksum, size report, and JSON release manifest beside it.
+This selects the `vm-development` profile and produces `out/orca-os-x86_64.raw`. It also creates a workspace-local development SSH key at `out/orca-vm.id_ed25519`, verifies that the artifact is a GPT image with an EFI System Partition, enforces explicit disk/initrd/EFI regression budgets, then writes a SHA-256 checksum, size report, and JSON release manifest beside it.
 Before image creation, it also verifies the staged root filesystem contains and enables every Orca system component.
+
+Build the locked-down, production-shaped x86 policy image with:
+
+```bash
+make image-production
+```
+
+This produces `out/orca-os-x86_64-production-board.raw`. It is a policy and userspace test artifact, not a V3s-flashable image. It has no root autologin, development root SSH key, enabled SSH service, QEMU guest agent, or externally bound management API. Device provisioning and encrypted remote management must be designed before this profile can become a deployable board image.
 
 Run the resulting image with QEMU:
 
@@ -66,6 +74,11 @@ The full Windows setup is in [docs/windows-vm.md](docs/windows-vm.md).
 - `tests/` host-side integration tests
 - `docs/` operator documentation
 - `targets/` architecture-specific work, beginning with x86-64
+
+## Build profiles
+
+- `vm-development`: QEMU/WHPX tooling, serial root autologin, generated key-only root SSH access, and API forwarding for local development.
+- `production-board`: locked root, no SSH package or service, no VM access configuration, loopback-only API, and no QEMU guest tooling. It currently uses the x86 UEFI boot stack only so its security policy can be built and inspected before the V3s board exists.
 
 The design-time hardware contract for the planned custom Allwinner V3s board is in [`targets/allwinner-v3s/BOARD-REQUIREMENTS.md`](targets/allwinner-v3s/BOARD-REQUIREMENTS.md). It records the schematic, boot/recovery, DRAM, PHY, MAC-address, power, watchdog, thermal, storage, and device-tree information the eventual board target will require.
 

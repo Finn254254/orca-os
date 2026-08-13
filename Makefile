@@ -1,12 +1,15 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: test image vm vm-reset vm-ssh vm-smoke vm-smoke-lowmem vm-smoke-cluster resource-report artifact-budget
+.PHONY: test image image-production vm vm-reset vm-ssh vm-smoke vm-smoke-lowmem vm-smoke-cluster resource-report artifact-budget
 
 test:
 	./tests/run.sh
 
 image:
 	./build/build-image.sh
+
+image-production:
+	ORCA_BUILD_PROFILE=production-board ./build/build-image.sh
 
 vm:
 	./vm/run-vm.sh

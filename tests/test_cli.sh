@@ -7,6 +7,7 @@ trap 'rm -rf "$temp_root"' EXIT
 
 mkdir -p "$temp_root/etc" "$temp_root/run/orca" "$temp_root/var/lib/orca" "$temp_root/usr/local/bin" "$temp_root/usr/lib/systemd/system" "$temp_root/etc/systemd/system/multi-user.target.wants" "$temp_root/bin"
 cp "$project_root/config/etc/orca-release" "$temp_root/etc/orca-release"
+printf 'vm-development\n' > "$temp_root/etc/orca-profile"
 cp "$project_root/cli/orca" "$temp_root/usr/local/bin/orca"
 chmod +x "$temp_root/usr/local/bin/orca"
 touch "$temp_root/usr/lib/systemd/system/orca-agent.service"
@@ -133,6 +134,7 @@ grep -q 'Overall: ok' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" doctor
 grep -q '"status":"ok"' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" doctor --json)"
 services="$(env "${test_env[@]}" "$project_root/cli/orca" services)"
 grep -q 'orca-agent.*active' <<<"$services"
+grep -q 'ssh.*active' <<<"$services"
 grep -q '"name":"orca-api","state":"active"' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" services --json)"
 grep -q 'mock service status: active' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" service orca-api status)"
 grep -q 'Restarted orca-api' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" service orca-api restart)"
@@ -143,6 +145,16 @@ if env "${test_env[@]}" "$project_root/cli/orca" service ssh restart >/dev/null 
   echo 'service restart unexpectedly allowed restarting ssh' >&2
   exit 1
 fi
+
+printf 'production-board\n' > "$temp_root/etc/orca-profile"
+production_services="$(env "${test_env[@]}" "$project_root/cli/orca" services --json)"
+grep -q '"name":"orca-api"' <<<"$production_services"
+if grep -q '"name":"ssh"' <<<"$production_services"; then
+  echo 'production service inventory included VM-only SSH' >&2
+  exit 1
+fi
+grep -q 'Overall: ok' <<<"$(env "${test_env[@]}" "$project_root/cli/orca" doctor)"
+printf 'vm-development\n' > "$temp_root/etc/orca-profile"
 if env "${test_env[@]}" "$project_root/cli/orca" logs orca-api 501 >/dev/null 2>&1; then
   echo 'logs unexpectedly accepted too many lines' >&2
   exit 1

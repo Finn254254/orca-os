@@ -13,6 +13,7 @@ report="${4:-}"
 image_max="${ORCA_MAX_IMAGE_BYTES:-1650000000}"
 initrd_max="${ORCA_MAX_INITRD_BYTES:-140000000}"
 efi_max="${ORCA_MAX_EFI_BYTES:-150000000}"
+profile="${ORCA_IMAGE_PROFILE:-x86_64-development-vm}"
 
 for limit in "$image_max" "$initrd_max" "$efi_max"; do
   [[ "$limit" =~ ^[0-9]+$ ]] && ((limit > 0)) || {
@@ -36,6 +37,7 @@ status=pass
 
 render_report() {
   ORCA_BUDGET_STATUS="$status" \
+  ORCA_BUDGET_PROFILE="$profile" \
   ORCA_BUDGET_IMAGE_PATH="$(basename "$image")" ORCA_BUDGET_IMAGE_SIZE="$image_size" ORCA_BUDGET_IMAGE_MAX="$image_max" \
   ORCA_BUDGET_INITRD_PATH="$(basename "$initrd")" ORCA_BUDGET_INITRD_SIZE="$initrd_size" ORCA_BUDGET_INITRD_MAX="$initrd_max" \
   ORCA_BUDGET_EFI_PATH="$(basename "$efi")" ORCA_BUDGET_EFI_SIZE="$efi_size" ORCA_BUDGET_EFI_MAX="$efi_max" \
@@ -55,7 +57,7 @@ def artifact(prefix):
 
 print(json.dumps({
     "schemaVersion": 1,
-    "profile": "x86_64-development-vm",
+    "profile": os.environ["ORCA_BUDGET_PROFILE"],
     "status": os.environ["ORCA_BUDGET_STATUS"],
     "artifacts": {
         "diskImage": artifact("IMAGE"),
@@ -82,6 +84,6 @@ else
 fi
 
 if [[ "$status" != pass ]]; then
-  echo "Orca development image exceeded its artifact size budget." >&2
+  echo "Orca image exceeded its artifact size budget: $profile" >&2
   exit 1
 fi

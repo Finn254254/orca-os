@@ -57,11 +57,11 @@ The final board device tree must provide:
 
 ## Production software gates
 
-The current x86 image is a development reference and must not be flashed to the V3s board. Before producing a board image:
+The current x86 images are policy/development references and must not be flashed to the V3s board. `make image-production` already enforces locked root access, no SSH, no QEMU guest tooling, and a loopback-only API, but it still uses an x86 UEFI kernel and disk layout. Before producing a board image:
 
 - build a separate 32-bit ARM target around SPL/U-Boot, the board DTB, and a measured kernel configuration;
 - measure usable DRAM after reservations and define hard boot/runtime memory budgets from the real PCB;
-- remove UEFI, QEMU guest tooling, serial root autologin, the development root SSH key, and unneeded packages;
+- replace the x86 UEFI boot stack with SPL/U-Boot, the board kernel and DTB while retaining the production profile's access restrictions;
 - decide whether Python fits the steady-state budget; otherwise replace the agent/API with a small native daemon;
 - keep logs volatile and bounded unless a deliberate wear-managed persistent log partition is designed;
 - require TLS or an authenticated encrypted overlay before exposing the bearer-authenticated API on a physical LAN;

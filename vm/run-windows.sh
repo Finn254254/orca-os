@@ -141,10 +141,7 @@ if [[ ! -f "$vars_copy" ]]; then
   cp "$ovmf_vars" "$vars_copy"
 fi
 
-if [[ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
-  echo "Restoring WSL Windows-executable interoperability..." >&2
-  printf ':WSLInterop:M::MZ::/init:P' | sudo tee /proc/sys/fs/binfmt_misc/register >/dev/null
-fi
+"$project_root/vm/ensure-wsl-interop.sh"
 
 if [[ "$overlay" != "none" ]]; then
   [[ -f "$qemu_img" ]] || fail "Windows qemu-img was not found: $qemu_img"

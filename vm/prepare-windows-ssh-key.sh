@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_key="${1:?Usage: $0 SOURCE_KEY}"
 [[ -f "$source_key" ]] || { echo "SSH key not found: $source_key" >&2; exit 1; }
 
-if [[ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
-  printf ':WSLInterop:M::MZ::/init:P' | sudo tee /proc/sys/fs/binfmt_misc/register >/dev/null
-fi
+"$project_root/vm/ensure-wsl-interop.sh"
 
 cmd_exe=/mnt/c/Windows/System32/cmd.exe
 icacls_exe=/mnt/c/Windows/System32/icacls.exe

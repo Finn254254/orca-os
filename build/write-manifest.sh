@@ -5,6 +5,7 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 image="${1:?Usage: $0 IMAGE.raw [MANIFEST.json]}"
 manifest="${2:-$image.manifest.json}"
 source_date_epoch="${SOURCE_DATE_EPOCH:-0}"
+profile="${ORCA_IMAGE_PROFILE:-x86_64-development-vm}"
 release_file="$project_root/config/etc/orca-release"
 
 [[ -f "$image" ]] || { echo "Image not found: $image" >&2; exit 1; }
@@ -22,6 +23,7 @@ ORCA_MANIFEST_SIZE="$(stat -c '%s' -- "$image")" \
 ORCA_MANIFEST_NAME="$(read_release_value PRETTY_NAME)" \
 ORCA_MANIFEST_VERSION="$(read_release_value VERSION)" \
 ORCA_MANIFEST_ARCHITECTURE="x86_64" \
+ORCA_MANIFEST_PROFILE="$profile" \
 ORCA_MANIFEST_EPOCH="$source_date_epoch" \
   python3 - "$manifest" <<'PY'
 import datetime
@@ -40,7 +42,7 @@ payload = {
         "sha256": os.environ["ORCA_MANIFEST_SHA256"],
         "sizeBytes": int(os.environ["ORCA_MANIFEST_SIZE"]),
     },
-    "profile": "x86_64-development-vm",
+    "profile": os.environ["ORCA_MANIFEST_PROFILE"],
     "sourceDateEpoch": epoch,
     "buildTimestamp": datetime.datetime.fromtimestamp(
         epoch, tz=datetime.timezone.utc
