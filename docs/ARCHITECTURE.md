@@ -1,55 +1,42 @@
-# Orca OS Architecture
+# Orca OS architecture
 
-## Goal
+## Current system
 
-Orca OS is a Linux distribution and management layer for Orca compute nodes. Linux provides the kernel, drivers, process model, networking, and hardware compatibility. Orca supplies the system identity, management services, local-AI integration, cluster behavior, administration tools, and eventually hardware-specific images.
+Orca OS is an appliance-style Linux platform with a small management layer. Linux supplies the kernel, drivers, networking, storage, and process isolation. Architecture-neutral Orca components currently provide:
 
-## v0.1 architecture
+- `orca-first-boot`: initializes persistent node credentials once;
+- `orca-agent`: maintains node identity and publishes hardware, platform, and health state;
+- `orca-api`: serves the read-only authenticated management API;
+- `orca`: provides local administration, diagnostics, peer enrollment, and support tooling;
+- systemd-networkd: provides wired DHCP in both profiles;
+- key-only root SSH: exists only in the `vm-development` profile.
 
-1. Linux base
-2. systemd service manager
-3. `orcad` core daemon
-4. `orca` command-line client
-5. node identity and discovery
-6. health and hardware telemetry
-7. AI runtime adapter layer
-8. service/container management
-9. management API
-10. later web management UI
+Persistent state lives under `/var/lib/orca` with mode 0700. Runtime records live under `/run/orca` and are recreated after boot. The API token and peer tokens are separate permission-restricted files and are never embedded in public node or peer records.
 
-## Development targets
+## Boot and readiness
 
-### x86-64 VM
+Readiness is deliberately split:
 
-Primary development target. It should boot and run under a Windows-hosted hypervisor so most OS software can be developed before Orca hardware exists.
+1. `orca-first-boot.service` creates or validates the API token.
+2. SSH, the agent, and API start without requiring Ethernet.
+3. `orca-core-ready.service` emits `ORCA_CORE_READY` when local/offline management works.
+4. Network-online waiting is bounded to 20 seconds.
+5. `orca-ready.service` emits `ORCA_OS_READY` for the full development smoke workflow.
 
-### ARM64
+A missing cable therefore cannot hold the future appliance in an unbounded boot wait.
 
-Secondary target after the VM stack is stable. Hardware-specific bootloader, kernel, device-tree, and driver configuration will live separately from common Orca services.
+## Management security
 
-## Core daemon
+`GET /healthz` exposes only liveness. Every `/v1/*` route requires the persistent bearer token and rejects missing or incorrect credentials. Requests are size- and time-bounded, request bodies are rejected, and the server handles one request at a time to avoid unbounded worker creation on small systems. The network API runs as the dedicated `orca-api` user and has read-only access to its allowlisted runtime and persistent records.
 
-`orcad` will become the local control plane for each machine. Planned responsibilities:
+The x86 launcher forwards API and SSH ports to Windows loopback only. The `production-board` profile additionally binds the API to guest loopback and omits SSH entirely, making remote management unavailable until a protected transport and provisioning design exists. HTTP bearer authentication does not provide confidentiality, so physical-board LAN management must use TLS or an authenticated encrypted overlay. Explicit peer enrollment records an expected node ID, endpoint, and separate credential; `orca peer check` verifies both reachability and returned identity. Enrollment does not imply automatic discovery or a distributed cluster protocol.
 
-- expose node status
-- maintain node identity
-- report CPU, memory, storage, network, accelerator and temperature information where available
-- discover trusted Orca nodes
-- manage local Orca services
-- expose a local management API
-- provide hooks for model runtimes
+## Resource model
 
-## CLI
+The current x86 image is a development environment, not the V3s production payload. Service accounting and task/file-descriptor limits are enabled now, the journal is volatile and capped at 4 MiB, and `orca resources` exposes process count, available memory, Orca RSS/PSS, and cgroup memory. `make vm-smoke-lowmem` tracks regressions under constrained x86 RAM.
 
-The `orca` CLI will communicate with `orcad`. Planned commands include:
+Python remains the largest Orca-specific runtime cost. If the manufactured board's measured usable RAM is near the V3s minimum envelope, the agent and API should be consolidated into a small native daemon and the production package set must exclude UEFI/QEMU/development-only components.
 
-- `orca status`
-- `orca nodes`
-- `orca hardware`
-- `orca models`
-- `orca services`
-- `orca update`
+## Build-profile and target separation
 
-## Security direction
-
-Orca services should use least privilege. Remote management must require authentication. Cluster discovery must not imply trust. Update artifacts should eventually be signed and recoverable.
+The `vm-development` x86-64 profile uses Q35, UEFI, virtio, Windows QEMU/WHPX, serial root autologin, and a generated root SSH key. The `production-board` x86-64 profile is a buildable policy gate: root remains locked, SSH and VM tooling are absent, and the API is loopback-only. It is still not a board image. The future Allwinner V3s target is 32-bit ARM and requires its own SPL/U-Boot, mainline kernel configuration, DTB, storage layout, recovery path, production console/provisioning policy, and minimal userspace manifest. Common Orca CLI/API schemas and the production policy can be reused; x86 boot artifacts cannot.

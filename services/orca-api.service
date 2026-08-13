@@ -1,14 +1,25 @@
 [Unit]
 Description=Orca local management API
 Documentation=https://github.com/Finn254254/orca-os
-After=orca-agent.service
+After=orca-first-boot.service orca-agent.service
+Requires=orca-first-boot.service
 Wants=orca-agent.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/lib/orca/orca-api.py
-Restart=always
+ExecStartPre=+/usr/lib/orca/orca-token-init
+ExecStart=/usr/bin/python3 /usr/lib/orca/orca-api.py --host 0.0.0.0 --token-file /var/lib/orca/api-token
+User=orca-api
+Group=orca-api
+Restart=on-failure
 RestartSec=5
+OOMPolicy=stop
+MemoryAccounting=true
+CPUAccounting=true
+TasksMax=16
+LimitNOFILE=64
 UMask=0027
 NoNewPrivileges=true
 PrivateTmp=true
@@ -26,6 +37,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
+ReadOnlyPaths=/run/orca /var/lib/orca
 
 [Install]
 WantedBy=multi-user.target

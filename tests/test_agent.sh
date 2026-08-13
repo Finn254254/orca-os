@@ -37,6 +37,23 @@ assert record["architecture"]
 assert record["kernel"]
 assert record["resources"]["cpuCores"] > 0
 assert record["resources"]["memoryMiB"] > 0
+assert record["resources"]["cpu"]["cores"] > 0
+assert record["resources"]["cpu"]["model"]
+assert record["resources"]["memory"]["totalMiB"] > 0
+assert record["resources"]["memory"]["availableMiB"] > 0
+assert record["resources"]["storage"]["rootTotalMiB"] > 0
+assert record["resources"]["storage"]["rootAvailableMiB"] >= 0
+assert record["resources"]["virtualization"]
+assert record["health"]["uptimeSeconds"] >= 0
+assert record["health"]["load1m"] >= 0
+assert record["health"]["load5m"] >= 0
+assert record["health"]["status"] in {"healthy", "degraded", "critical"}
+assert isinstance(record["health"]["warnings"], list)
+assert record["platform"]["boardModel"]
+assert record["platform"]["firmware"] in {"uefi", "device-tree", "unknown"}
+assert isinstance(record["platform"]["compatible"], list)
+assert isinstance(record["platform"]["networkInterfaces"], list)
+assert isinstance(record["platform"]["thermalZones"], list)
 PY
 kill "$agent_pid"
 wait "$agent_pid" || true

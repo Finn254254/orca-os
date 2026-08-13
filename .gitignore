@@ -1,0 +1,7 @@
+/out/
+/build/orca-os-x86_64
+/build/orca-os-x86_64.*
+/build/*.raw
+/build/*.raw.*
+__pycache__/
+*.pyc

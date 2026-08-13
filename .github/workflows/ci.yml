@@ -20,6 +20,7 @@ jobs:
       - name: Validate the mkosi configuration
         run: |
           pipx install git+https://github.com/systemd/mkosi.git
-          mkosi -C build summary
+          mkosi -C build --profile=vm-development summary
+          mkosi -C build --profile=production-board summary
       - name: Validate image verifier entrypoint
         run: build/verify-image.sh image.raw --dry-run

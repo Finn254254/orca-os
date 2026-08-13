@@ -24,14 +24,26 @@ fi
 }
 
 write_status() {
-  local hostname architecture kernel updated pid cpu_cores memory_mib temp_record
+  local hostname architecture kernel updated pid cpu_cores cpu_model memory_mib memory_available_mib
+  local uptime_seconds load_1m load_5m disk_total_mib disk_available_mib virtualization temp_record
   hostname="$(hostname)"
   architecture="$(uname -m)"
   kernel="$(uname -r)"
   updated="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   pid="$$"
   cpu_cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 0)"
+  cpu_model="$(awk -F: '/^(model name|Hardware|Processor)[[:space:]]*:/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' /proc/cpuinfo 2>/dev/null || true)"
+  [[ -n "$cpu_model" ]] || cpu_model="unknown"
   memory_mib="$(awk '/MemTotal/ { printf "%d", $2 / 1024; exit }' /proc/meminfo 2>/dev/null || printf 0)"
+  memory_available_mib="$(awk '/MemAvailable/ { printf "%d", $2 / 1024; exit }' /proc/meminfo 2>/dev/null || printf 0)"
+  uptime_seconds="$(awk '{ printf "%d", $1 }' /proc/uptime 2>/dev/null || printf 0)"
+  load_1m="$(awk '{ print $1 }' /proc/loadavg 2>/dev/null || printf 0)"
+  load_5m="$(awk '{ print $2 }' /proc/loadavg 2>/dev/null || printf 0)"
+  read -r disk_total_mib disk_available_mib < <(df -Pm / | awk 'NR == 2 { print $2, $4 }')
+  disk_total_mib="${disk_total_mib:-0}"
+  disk_available_mib="${disk_available_mib:-0}"
+  virtualization="$(systemd-detect-virt 2>/dev/null || true)"
+  [[ -n "$virtualization" ]] || virtualization="physical"
 
   cat > "$runtime_dir/agent.status" <<EOF
 Agent: active
@@ -39,6 +51,9 @@ Node ID: $node_id
 Hostname: $hostname
 Updated: $updated
 PID: $pid
+Uptime Seconds: $uptime_seconds
+Load 1m: $load_1m
+Load 5m: $load_5m
 EOF
   temp_record="$runtime_dir/node.json.tmp.$$"
   ORCA_RECORD_NODE_ID="$node_id" \
@@ -47,12 +62,86 @@ EOF
   ORCA_RECORD_KERNEL="$kernel" \
   ORCA_RECORD_PID="$pid" \
   ORCA_RECORD_CPU_CORES="$cpu_cores" \
+  ORCA_RECORD_CPU_MODEL="$cpu_model" \
   ORCA_RECORD_MEMORY_MIB="$memory_mib" \
+  ORCA_RECORD_MEMORY_AVAILABLE_MIB="$memory_available_mib" \
+  ORCA_RECORD_DISK_TOTAL_MIB="$disk_total_mib" \
+  ORCA_RECORD_DISK_AVAILABLE_MIB="$disk_available_mib" \
+  ORCA_RECORD_UPTIME_SECONDS="$uptime_seconds" \
+  ORCA_RECORD_LOAD_1M="$load_1m" \
+  ORCA_RECORD_LOAD_5M="$load_5m" \
+  ORCA_RECORD_VIRTUALIZATION="$virtualization" \
   ORCA_RECORD_UPDATED="$updated" \
+  ORCA_RECORD_PROC_ROOT="${ORCA_PROC_ROOT:-/proc}" \
+  ORCA_RECORD_SYS_ROOT="${ORCA_SYS_ROOT:-/sys}" \
     python3 - "$temp_record" <<'PY'
 import json
 import os
 import sys
+from pathlib import Path
+
+proc_root = Path(os.environ["ORCA_RECORD_PROC_ROOT"])
+sys_root = Path(os.environ["ORCA_RECORD_SYS_ROOT"])
+
+def read_value(path, default=None):
+    try:
+        return path.read_bytes().replace(b"\x00", b" ").decode(errors="replace").strip() or default
+    except OSError:
+        return default
+
+def read_compatible(path):
+    try:
+        return [item.decode(errors="replace") for item in path.read_bytes().split(b"\x00") if item]
+    except OSError:
+        return []
+
+device_tree = proc_root / "device-tree"
+board_model = read_value(device_tree / "model") or read_value(sys_root / "class/dmi/id/product_name") or "unknown"
+board_serial = read_value(device_tree / "serial-number") or read_value(sys_root / "class/dmi/id/product_serial")
+firmware = "uefi" if (sys_root / "firmware/efi").is_dir() else "device-tree" if device_tree.is_dir() else "unknown"
+network_interfaces = []
+for interface in sorted((sys_root / "class/net").glob("*")):
+    if interface.name == "lo":
+        continue
+    network_interfaces.append({
+        "name": interface.name,
+        "macAddress": read_value(interface / "address"),
+        "state": read_value(interface / "operstate", "unknown"),
+        "carrier": read_value(interface / "carrier") == "1",
+    })
+thermal_zones = []
+for zone in sorted((sys_root / "class/thermal").glob("thermal_zone*")):
+    raw_temp = read_value(zone / "temp")
+    try:
+        temperature = round(int(raw_temp) / 1000, 1)
+    except (TypeError, ValueError):
+        continue
+    thermal_zones.append({"name": zone.name, "type": read_value(zone / "type", "unknown"), "celsius": temperature})
+
+cpu_cores = int(os.environ["ORCA_RECORD_CPU_CORES"])
+memory_total = int(os.environ["ORCA_RECORD_MEMORY_MIB"])
+memory_available = int(os.environ["ORCA_RECORD_MEMORY_AVAILABLE_MIB"])
+disk_total = int(os.environ["ORCA_RECORD_DISK_TOTAL_MIB"])
+disk_available = int(os.environ["ORCA_RECORD_DISK_AVAILABLE_MIB"])
+load_1m = float(os.environ["ORCA_RECORD_LOAD_1M"])
+load_5m = float(os.environ["ORCA_RECORD_LOAD_5M"])
+warnings = []
+critical = False
+if memory_total and (memory_available < 8 or memory_available / memory_total < 0.10):
+    warnings.append("memory-critical")
+    critical = True
+elif memory_total and (memory_available < 16 or memory_available / memory_total < 0.20):
+    warnings.append("memory-low")
+if disk_total and (disk_available < 64 or disk_available / disk_total < 0.05):
+    warnings.append("root-storage-critical")
+    critical = True
+elif disk_total and (disk_available < 128 or disk_available / disk_total < 0.10):
+    warnings.append("root-storage-low")
+if cpu_cores and load_5m > cpu_cores * 3:
+    warnings.append("load-critical")
+    critical = True
+elif cpu_cores and load_5m > cpu_cores * 1.5:
+    warnings.append("load-high")
 
 record = {
     "schemaVersion": 1,
@@ -63,8 +152,37 @@ record = {
     "agent": "active",
     "pid": int(os.environ["ORCA_RECORD_PID"]),
     "resources": {
-        "cpuCores": int(os.environ["ORCA_RECORD_CPU_CORES"]),
-        "memoryMiB": int(os.environ["ORCA_RECORD_MEMORY_MIB"]),
+        "cpu": {
+            "cores": cpu_cores,
+            "model": os.environ["ORCA_RECORD_CPU_MODEL"],
+        },
+        "memory": {
+            "totalMiB": memory_total,
+            "availableMiB": memory_available,
+        },
+        "storage": {
+            "rootTotalMiB": disk_total,
+            "rootAvailableMiB": disk_available,
+        },
+        "virtualization": os.environ["ORCA_RECORD_VIRTUALIZATION"],
+        # Kept for compatibility with v0.1 consumers.
+        "cpuCores": cpu_cores,
+        "memoryMiB": memory_total,
+    },
+    "health": {
+        "uptimeSeconds": int(os.environ["ORCA_RECORD_UPTIME_SECONDS"]),
+        "load1m": load_1m,
+        "load5m": load_5m,
+        "status": "critical" if critical else "degraded" if warnings else "healthy",
+        "warnings": warnings,
+    },
+    "platform": {
+        "boardModel": board_model,
+        "boardSerial": board_serial,
+        "compatible": read_compatible(device_tree / "compatible"),
+        "firmware": firmware,
+        "networkInterfaces": network_interfaces,
+        "thermalZones": thermal_zones,
     },
     "updated": os.environ["ORCA_RECORD_UPDATED"],
 }
@@ -73,6 +191,7 @@ with open(sys.argv[1], "w", encoding="utf-8") as output:
     output.write("\n")
 PY
   mv "$temp_record" "$runtime_dir/node.json"
+  chmod 640 "$runtime_dir/node.json"
 }
 
 trap 'rm -f "$runtime_dir/agent.status" "$runtime_dir/node.json" "$runtime_dir"/node.json.tmp.*; exit 0' TERM INT

@@ -9,5 +9,6 @@ for test_file in "$project_root"/tests/test_*.sh; do
 done
 
 python3 "$project_root/tests/test_api.py"
+python3 "$project_root/tests/test_token_init.py"
 
 echo "All Orca OS tests passed."

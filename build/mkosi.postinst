@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ -n "${BUILDROOT:-}" && "$BUILDROOT" != / ]] || {
+  echo "mkosi did not provide a safe image build root." >&2
+  exit 1
+}
+
+# Never clone an SSH server identity into every VM overlay or physical device.
+# orca-ssh-host-keys.service creates a unique identity in writable state on boot.
+rm -f -- "$BUILDROOT"/etc/ssh/ssh_host_*_key "$BUILDROOT"/etc/ssh/ssh_host_*_key.pub
+if compgen -G "$BUILDROOT/etc/ssh/ssh_host_*_key" >/dev/null; then
+  echo "SSH host private keys remain in the cloneable image." >&2
+  exit 1
+fi
